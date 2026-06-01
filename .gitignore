@@ -1,0 +1,91 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+python-env/
+venv/
+ENV/
+env/
+.env
+.env.*
+
+# Django
+*.sqlite3
+*.log
+media/
+staticfiles/
+static/
+local_settings.py
+db.sqlite3
+
+# Pytest / coverage
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+
+# Django migrations cache / pycache
+*/migrations/__pycache__/
+
+# Node
+node_modules/
+dist/
+out/
+build/
+.vite/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite / frontend
+**/dist/
+**/.vite/
+
+# IDEs / editors
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# System
+*.log
+*.tmp
+*.temp
+.cache
+
+# Django secret key / settings files
+secrets.json
+
+# Mac
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# Runtime files
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+package-lock.json
+npm-debug.log
+
+# Optional: local files
+*.local
