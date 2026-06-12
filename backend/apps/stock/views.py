@@ -55,43 +55,54 @@ class StockAdjustmentView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request):
-        serializer = StockAdjustmentSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
+        from django.db import transaction
+        with transaction.atomic():
+            serializer = StockAdjustmentSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            data = serializer.validated_data
 
-        product = get_object_or_404(Product, id=data['product_id'], is_active=True)
-        qty = data['quantity']
-        before = product.stock_quantity
-        after = before + qty
+            product = get_object_or_404(Product.objects.select_for_update(), id=data['product_id'], is_active=True)
+            qty = data['quantity']
+            before = product.stock_quantity
+            after = before + qty
 
-        if after < 0:
-            return Response(
-                {'error': f'Stock insuffisant. Stock actuel : {before}'},
-                status=status.HTTP_400_BAD_REQUEST
+            if after < 0:
+                return Response(
+                    {'error': f'Stock insuffisant. Stock actuel : {before}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Mise à jour stock
+            product.stock_quantity = after
+            product.save(update_fields=['stock_quantity'])
+
+            # Traçabilité
+            movement = StockMovement.objects.create(
+                product=product,
+                movement_type=data['movement_type'],
+                quantity=qty,
+                stock_before=before,
+                stock_after=after,
+                note=data.get('note', ''),
+                created_by=request.user,
             )
 
-        # Mise à jour stock
-        product.stock_quantity = after
-        product.save(update_fields=['stock_quantity'])
+            # Alertes + WebSocket
+            _, level = check_and_create_alert(product)
+            notify_stock_update(product)
+            if level:
+                notify_stock_alert(product, level)
 
-        # Traçabilité
-        movement = StockMovement.objects.create(
-            product=product,
-            movement_type=data['movement_type'],
-            quantity=qty,
-            stock_before=before,
-            stock_after=after,
-            note=data.get('note', ''),
-            created_by=request.user,
-        )
+            from apps.settings_app.utils import log_audit_action
+            log_audit_action(
+                request, 
+                'adjustment', 
+                f"Ajustement de stock ({qty}) pour {product.name}",
+                old_value={"stock": before},
+                new_value={"stock": after}
+            )
 
-        # Alertes + WebSocket
-        _, level = check_and_create_alert(product)
-        notify_stock_update(product)
-        if level:
-            notify_stock_alert(product, level)
-
-        return Response(StockMovementSerializer(movement).data, status=status.HTTP_201_CREATED)
+            return Response(StockMovementSerializer(movement).data, status=status.HTTP_201_CREATED)
 
 
 # ── ALERTES ──────────────────────────────────────────────────────

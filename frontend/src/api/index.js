@@ -112,7 +112,20 @@ export const reportsAPI = {
   topProducts:    (params) => client.get('/reports/top-products/', { params }),
   stockValue:     ()       => client.get('/reports/stock-value/'),
 
-  invoicePDF:     (id)     => `/api/reports/invoice/${id}/pdf/`,
+  // Télécharge la facture PDF avec le token JWT inclus
+  invoicePDF: async (id) => {
+    try {
+      const response = await client.get(`/reports/invoice/${id}/pdf/`, {
+        responseType: 'blob',
+      })
+      const filename = `facture_${id}.pdf`
+      downloadBlob(response.data, filename)
+      return true
+    } catch (err) {
+      console.error('Erreur téléchargement PDF:', err)
+      throw err
+    }
+  },
 
   exportSales:    (params) => client.get('/reports/export/sales/', { params, responseType: 'blob' }),
   exportProducts: (params) => client.get('/reports/export/products/', { params, responseType: 'blob' }),
@@ -139,6 +152,7 @@ export const settingsAPI = {
   },
   backupList:   () => client.get('/settings/backup/list/'),
   manualBackup: () => client.post('/settings/backup/manual/'),
+  auditLogs:    (params) => client.get('/settings/audit/', { params }),
 }
 
 // ══════════════════════════════════════════════════════════════

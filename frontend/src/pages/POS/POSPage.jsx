@@ -3,21 +3,23 @@ import {
   Search, ShoppingCart, Trash2, Plus, Minus, User, CreditCard,
   Smartphone, Banknote, ReceiptText, X, Check, Percent, ChevronDown
 } from 'lucide-react'
-import { catalogAPI, salesAPI, formatCurrency } from '../../api'
+import { catalogAPI, salesAPI, reportsAPI, formatCurrency } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
 import toast from 'react-hot-toast'
 
 const PAYMENT_METHODS = [
-  { value: 'cash',     label: 'Espèces',    icon: Banknote },
-  { value: 'mtn',      label: 'MTN MoMo',   icon: Smartphone },
-  { value: 'moov',     label: 'Moov Money', icon: Smartphone },
-  { value: 'card',     label: 'Carte',      icon: CreditCard },
-  { value: 'transfer', label: 'Virement',   icon: CreditCard },
+  { value: 'cash',     label: 'Espèces',       icon: Banknote },
+  { value: 'mtn',      label: 'MTN MoMo',      icon: Smartphone },
+  { value: 'moov',     label: 'Moov Money',    icon: Smartphone },
+  { value: 'celtiis',  label: 'Celtiis Money', icon: Smartphone },
+  { value: 'card',     label: 'Carte',         icon: CreditCard },
+  { value: 'transfer', label: 'Virement',      icon: CreditCard },
 ]
 
 export default function POSPage() {
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
   const [query, setQuery]           = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [products, setProducts]     = useState([])
   const [allProducts, setAllProducts] = useState([])
   const [cart, setCart]             = useState([])
@@ -32,10 +34,18 @@ export default function POSPage() {
   const [categories, setCategories] = useState([])
   const searchRef = useRef()
 
+  // Debounce de la recherche
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(query)
+    }, 300)
+    return () => clearTimeout(handler)
+  }, [query])
+
   // Chargement initial
   useEffect(() => {
     Promise.all([
-      catalogAPI.products({ page_size: 100, is_active: true }),
+      catalogAPI.products({ page_size: 20, is_active: true, min_stock: 1 }), // Exclure produits inactifs et en rupture
       salesAPI.clients({ page_size: 200 }),
       catalogAPI.categories({ active_only: true }),
     ]).then(([pRes, cRes, catRes]) => {
@@ -47,20 +57,27 @@ export default function POSPage() {
     }).catch(() => toast.error('Erreur chargement des produits'))
   }, [])
 
-  // Filtre par recherche + catégorie
+  // Recherche via API quand les filtres changent
   useEffect(() => {
-    let filtered = allProducts
-    if (catFilter !== 'all') {
-      filtered = filtered.filter(p => p.category === parseInt(catFilter))
+    if (!debouncedQuery.trim() && catFilter === 'all') {
+      setProducts(allProducts) // Restaure les produits initiaux
+      return
     }
-    if (query.trim()) {
-      const q = query.toLowerCase()
-      filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q)
-      )
+    
+    const search = async () => {
+      try {
+        const res = await catalogAPI.products({
+          page_size: 50, is_active: true, min_stock: 1,
+          ...(debouncedQuery && { search: debouncedQuery }),
+          ...(catFilter !== 'all' && { category: catFilter }),
+        })
+        setProducts(res.data?.results ?? res.data ?? [])
+      } catch (e) {
+        console.error("Erreur de recherche POS:", e)
+      }
     }
-    setProducts(filtered)
-  }, [query, catFilter, allProducts])
+    search()
+  }, [debouncedQuery, catFilter, allProducts])
 
   const addToCart = (product) => {
     if (product.stock_quantity <= 0) return
@@ -128,8 +145,8 @@ export default function POSPage() {
       setSelectedClient(null)
       setAmountPaid('')
       setDiscount('')
-      // Rafraîchir les stocks dans la liste produits
-      const updated = await catalogAPI.products({ page_size: 100, is_active: true })
+      // Rafraîchir les stocks dans la liste produits initiale
+      const updated = await catalogAPI.products({ page_size: 20, is_active: true, min_stock: 1 })
       const prods = updated.data?.results ?? updated.data ?? []
       setAllProducts(prods)
     } catch (e) {
@@ -436,7 +453,7 @@ function SuccessScreen({ sale, currency, onNew }) {
       )}
       <div style={{ display: 'flex', gap: 12 }}>
         <a
-          href={`/api/reports/invoice/${sale.id}/pdf/`}
+          onClick={() => reportsAPI.invoicePDF(sale.id)}
           target="_blank"
           rel="noopener noreferrer"
           className="btn btn-outline"

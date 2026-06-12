@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Search, RefreshCw, X, SlidersHorizontal, Plus, AlertTriangle, Download } from 'lucide-react'
+import { Search, RefreshCw, X, SlidersHorizontal, Plus, AlertTriangle, Download, Package } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { stockAPI, reportsAPI, catalogAPI, formatCurrency, formatDatetime, downloadBlob } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
 import useAuthStore from '../../store/authStore'
@@ -23,26 +24,30 @@ export default function StockPage() {
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo]     = useState('')
   const [page, setPage]         = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [showAdjust, setShowAdjust] = useState(false)
   const [exporting, setExporting]   = useState(false)
-  const PAGE_SIZE = 30
+  const [pageSize, setPageSize]     = useState(50)
 
   const loadMovements = useCallback(async () => {
     setLoading(true)
     try {
       const params = {
-        page, page_size: PAGE_SIZE, ordering: '-created_at',
+        page, page_size: pageSize, ordering: '-created_at',
         ...(search && { search }),
         ...(typeFilter && { movement_type: typeFilter }),
+        ...(dateFrom && { date_from: dateFrom }),
+        ...(dateTo && { date_to: dateTo }),
       }
       const res = await stockAPI.movements(params)
       setMovements(res.data?.results ?? [])
       setTotalCount(res.data?.count ?? 0)
     } catch { toast.error('Erreur') }
     finally { setLoading(false) }
-  }, [page, search, typeFilter])
+  }, [page, search, typeFilter, pageSize, dateFrom, dateTo])
 
   const loadAlerts = useCallback(async () => {
     setLoading(true)
@@ -76,7 +81,7 @@ export default function StockPage() {
     finally { setExporting(false) }
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+  const totalPages = Math.ceil(totalCount / pageSize)
 
   return (
     <div>
@@ -119,19 +124,37 @@ export default function StockPage() {
           <div className="search-bar">
             <div className="input-wrapper" style={{ flex:1, maxWidth:300 }}>
               <Search size={15} className="input-icon" />
-              <input className="input has-icon" placeholder="Produit, référence…"
+              <input className="input has-icon" placeholder="Produit, SKU, référence…"
                 value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
             </div>
-            <select className="input" style={{ width:180 }} value={typeFilter}
+            <select className="input" style={{ width:170 }} value={typeFilter}
               onChange={e => { setTypeFilter(e.target.value); setPage(1) }}>
               <option value="">Tous types</option>
               {Object.entries(MOVE_TYPES).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            {(search||typeFilter) && (
-              <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setTypeFilter(''); setPage(1) }}>
+            <input type="date" className="input" style={{ width:136 }}
+              value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
+              title="Date de début" />
+            <span style={{ fontSize:'0.8rem', color:'var(--text-muted)', alignSelf:'center' }}>→</span>
+            <input type="date" className="input" style={{ width:136 }}
+              value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }}
+              title="Date de fin" />
+            {(search||typeFilter||dateFrom||dateTo) && (
+              <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setTypeFilter(''); setDateFrom(''); setDateTo(''); setPage(1) }}>
                 <X size={13} /> Réinitialiser
               </button>
             )}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Par page :</span>
+              <select
+                className="input"
+                style={{ width: 70, padding: '4px 8px', fontSize: '0.8rem' }}
+                value={pageSize}
+                onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+              >
+                {[25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
           </div>
 
           <div className="card">
@@ -174,7 +197,22 @@ export default function StockPage() {
                         </td>
                         <td style={{ textAlign:'center', fontFamily:'var(--font-mono)', fontSize:'0.82rem', color:'var(--text-muted)' }}>{m.stock_before}</td>
                         <td style={{ textAlign:'center', fontFamily:'var(--font-mono)', fontSize:'0.82rem', fontWeight:700 }}>{m.stock_after}</td>
-                        <td style={{ fontSize:'0.78rem', fontFamily:'var(--font-mono)', color:'var(--text-muted)' }}>{m.reference || '—'}</td>
+                        <td style={{ fontSize:'0.78rem', fontFamily:'var(--font-mono)', color:'var(--text-muted)' }}>
+                          {m.reference ? (
+                            m.movement_type === 'sale' || m.movement_type === 'sale_cancel' ? (
+                              <Link to={`/sales/${m.reference_id || ''}`}
+                                style={{ color:'var(--blue-600)', textDecoration:'none', fontFamily:'var(--font-mono)' }}
+                                onClick={e => !m.reference_id && e.preventDefault()}
+                              >
+                                {m.reference}
+                              </Link>
+                            ) : m.movement_type === 'restock' ? (
+                              <span style={{ fontFamily:'var(--font-mono)', color:'var(--success)' }}>{m.reference}</span>
+                            ) : (
+                              <span>{m.reference}</span>
+                            )
+                          ) : '—'}
+                        </td>
                         <td style={{ fontSize:'0.78rem', color:'var(--text-secondary)' }}>{m.created_by_name || 'Système'}</td>
                       </tr>
                     ))}
@@ -292,6 +330,8 @@ function AdjustmentModal({ currency, onClose, onSaved }) {
 
   const handleSave = async () => {
     if (!form.product_id || !form.quantity) { toast.error('Produit et quantité requis'); return }
+    if (!confirm(`Voulez-vous vraiment appliquer cet ajustement de stock ? Cette opération est irréversible.`)) return
+    
     setSaving(true)
     try {
       await stockAPI.adjust({

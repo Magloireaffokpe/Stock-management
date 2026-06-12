@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Plus, Search, Filter, Edit2, Trash2, Package, ChevronDown,
-  Image, Upload, TrendingUp, AlertTriangle, RefreshCw, X
+  Image, Upload, TrendingUp, AlertTriangle, RefreshCw, X, Eye
 } from 'lucide-react'
 import { catalogAPI, formatCurrency } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
@@ -32,13 +33,13 @@ export default function CatalogPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [showModal, setShowModal]   = useState(false)
   const [editProduct, setEditProduct] = useState(null)
-  const PAGE_SIZE = 20
+  const [pageSize, setPageSize]     = useState(25)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const params = {
-        page, page_size: PAGE_SIZE,
+        page, page_size: pageSize,
         ...(search && { search }),
         ...(filters.category && { category: filters.category }),
         ...(filters.stock_status && { stock_status: filters.stock_status }),
@@ -49,7 +50,7 @@ export default function CatalogPage() {
       setTotalCount(res.data?.count ?? 0)
     } catch { toast.error('Erreur chargement catalogue') }
     finally { setLoading(false) }
-  }, [page, search, filters])
+  }, [page, search, filters, pageSize])
 
   useEffect(() => { load() }, [load])
 
@@ -72,7 +73,7 @@ export default function CatalogPage() {
     } catch { toast.error('Erreur') }
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+  const totalPages = Math.ceil(totalCount / pageSize)
 
   return (
     <div>
@@ -131,6 +132,17 @@ export default function CatalogPage() {
             <X size={13} /> Réinitialiser
           </button>
         )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Par page :</span>
+          <select
+            className="input"
+            style={{ width: 70, padding: '4px 8px', fontSize: '0.8rem' }}
+            value={pageSize}
+            onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+          >
+            {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* Table */}
@@ -168,7 +180,9 @@ export default function CatalogPage() {
                     <tr key={p.id}>
                       <td><span className="td-mono" style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{p.sku}</span></td>
                       <td>
-                        <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{p.name}</div>
+                        <Link to={`/catalog/${p.id}`} style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--blue-600)', textDecoration: 'none' }}>
+                          {p.name}
+                        </Link>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{p.condition}</div>
                       </td>
                       <td>
@@ -206,6 +220,13 @@ export default function CatalogPage() {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
+                          <Link
+                            to={`/catalog/${p.id}`}
+                            className="btn btn-ghost btn-icon btn-sm"
+                            data-tooltip="Détails"
+                          >
+                            <Eye size={14} />
+                          </Link>
                           <button
                             className="btn btn-ghost btn-icon btn-sm"
                             onClick={() => { setEditProduct(p); setShowModal(true) }}

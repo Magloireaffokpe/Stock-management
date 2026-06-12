@@ -8,7 +8,19 @@ import { reportsAPI, formatCurrency, downloadBlob } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
 import toast from 'react-hot-toast'
 
-const COLORS = ['#1A52A0','#F06820','#16A34A','#7C3AED','#0891B2','#D97706','#DC2626','#0D9488']
+// Palette haute visibilité — couleurs très contrastées entre elles
+const COLORS = [
+  '#2563EB', // Bleu vif
+  '#F97316', // Orange
+  '#16A34A', // Vert
+  '#DC2626', // Rouge
+  '#7C3AED', // Violet
+  '#0891B2', // Cyan
+  '#D97706', // Ambre
+  '#DB2777', // Rose
+  '#065F46', // Vert foncé
+  '#92400E', // Marron
+]
 
 const CustomTooltip = ({ active, payload, label, currency }) => {
   if (!active || !payload?.length) return null
@@ -20,6 +32,22 @@ const CustomTooltip = ({ active, payload, label, currency }) => {
           {p.name}: {typeof p.value === 'number' && p.value > 999 ? formatCurrency(p.value, currency) : p.value}
         </p>
       ))}
+    </div>
+  )
+}
+
+const PieTooltip = ({ active, payload, currency, total }) => {
+  if (!active || !payload?.length) return null
+  const item = payload[0]
+  const pct = total > 0 ? ((item.value / total) * 100).toFixed(1) : 0
+  return (
+    <div style={{ background:'#0D1B33', borderRadius:10, padding:'10px 16px', boxShadow:'0 8px 24px rgba(0,0,0,0.35)', minWidth:170 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+        <div style={{ width:10, height:10, borderRadius:'50%', background:item.payload.fill, flexShrink:0 }} />
+        <span style={{ color:'#fff', fontSize:'0.82rem', fontWeight:700 }}>{item.name}</span>
+      </div>
+      <div style={{ color:'#4ADE80', fontSize:'0.85rem', fontWeight:800 }}>{formatCurrency(item.value, currency)}</div>
+      <div style={{ color:'#94AECF', fontSize:'0.75rem', marginTop:2 }}>{pct}% du CA total</div>
     </div>
   )
 }
@@ -182,17 +210,52 @@ export default function ReportsPage() {
                   <div className="card-body">
                     {catData.length === 0 ? (
                       <div className="empty-state" style={{ padding:'20px 10px' }}><BarChart3 size={28} /><p>Aucune vente</p></div>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={200}>
-                        <PieChart>
-                          <Pie data={catData} dataKey="total_revenue" nameKey="product__category__name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3}>
-                            {catData.map((_,i) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip formatter={v => formatCurrency(v, currency)} contentStyle={{ background:'#0D1B33', border:'none', borderRadius:10, fontSize:'0.8rem', color:'#fff' }} />
-                          <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize:'0.75rem' }} formatter={v => v?.length > 18 ? v.slice(0,17)+'…' : v} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    )}
+                    ) : (() => {
+                      const catTotal = catData.reduce((s, d) => s + (d.total_revenue || 0), 0)
+                      return (
+                        <>
+                          <ResponsiveContainer width="100%" height={200}>
+                            <PieChart>
+                              <Pie
+                                data={catData}
+                                dataKey="total_revenue"
+                                nameKey="product__category__name"
+                                cx="50%" cy="50%"
+                                innerRadius={45} outerRadius={75}
+                                paddingAngle={3}
+                                strokeWidth={2}
+                                stroke="var(--bg-card)"
+                              >
+                                {catData.map((entry, i) => (
+                                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip content={<PieTooltip currency={currency} total={catTotal} />} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          {/* Légende manuelle avec valeurs exactes */}
+                          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {catData.map((d, i) => {
+                              const pct = catTotal > 0 ? ((d.total_revenue / catTotal) * 100).toFixed(1) : 0
+                              return (
+                                <div key={i} style={{ display:'flex', alignItems:'center', gap:8, fontSize:'0.78rem' }}>
+                                  <div style={{ width:10, height:10, borderRadius:'50%', background:COLORS[i%COLORS.length], flexShrink:0 }} />
+                                  <span style={{ flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'var(--text-secondary)' }}>
+                                    {d.product__category__name || 'Sans catégorie'}
+                                  </span>
+                                  <span style={{ fontFamily:'var(--font-mono)', fontWeight:700, color:'var(--text-primary)', flexShrink:0 }}>
+                                    {formatCurrency(d.total_revenue, currency)}
+                                  </span>
+                                  <span style={{ fontFamily:'var(--font-mono)', color:'var(--text-muted)', flexShrink:0, minWidth:36, textAlign:'right' }}>
+                                    {pct}%
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </>
+                      )
+                    })()}
                   </div>
                 </div>
 

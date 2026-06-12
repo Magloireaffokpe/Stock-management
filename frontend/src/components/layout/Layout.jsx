@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, ShoppingCart, Package, Receipt, RefreshCw,
   Boxes, Users, BarChart3, Settings, LogOut, Bell, AlertTriangle,
-  ChevronRight, Store
+  ChevronRight, Store, Shield, Truck, BookOpen
 } from 'lucide-react'
 import useAuthStore from '../../store/authStore'
 import useAlertStore from '../../store/alertStore'
@@ -24,6 +24,7 @@ const NAV = [
     section: 'Gestion',
     items: [
       { to: '/catalog',  icon: Package,     label: 'Catalogue' },
+      { to: '/suppliers',icon: Truck,       label: 'Fournisseurs' },
       { to: '/sales',    icon: Receipt,     label: 'Ventes' },
       { to: '/restocks', icon: RefreshCw,   label: 'Réappros' },
       { to: '/stock',    icon: Boxes,       label: 'Mouvements' },
@@ -39,7 +40,9 @@ const NAV = [
   {
     section: 'Système',
     items: [
-      { to: '/settings', icon: Settings, label: 'Paramètres', adminOnly: true },
+      { to: '/settings', icon: Settings,  label: 'Paramètres',       adminOnly: true },
+      { to: '/audit',    icon: Shield,    label: "Journal d'audit",  adminOnly: true },
+      { to: '/lexique',  icon: BookOpen,  label: 'Lexique' },
     ],
   },
 ]
@@ -56,6 +59,9 @@ function PageTitle() {
     '/clients':  'Clients',
     '/reports':  'Rapports & Analyses',
     '/settings': 'Paramètres',
+    '/audit':    "Journal d'audit",
+    '/profile':  'Mon Profil',
+    '/lexique':  'Lexique',
   }
   const base = '/' + pathname.split('/')[1]
   return titles[base] || titles[pathname] || 'MICROLOGIS'
@@ -87,7 +93,9 @@ export default function Layout() {
         {/* Logo */}
         <div className="sidebar-logo">
           {settings?.logo_url ? (
-            <img src={settings.logo_url} alt="Logo" />
+            <div className="sidebar-logo-container">
+              <img src={settings.logo_url} alt="Logo" />
+            </div>
           ) : (
             <div style={{
               width: 36, height: 36, borderRadius: 8,
@@ -135,18 +143,25 @@ export default function Layout() {
           })}
         </nav>
 
-        {/* User */}
-        <div className="sidebar-user">
+        {/* User — cliquable pour aller sur Mon Profil */}
+        <div
+          className="sidebar-user"
+          onClick={() => navigate('/profile')}
+          style={{ cursor: 'pointer' }}
+          title="Mon Profil"
+        >
           <div className="user-avatar">{initials}</div>
           <div className="user-info">
             <div className="user-name">
               {user?.first_name ? `${user.first_name} ${user.last_name}` : user?.username}
             </div>
-            <div className="user-role">{user?.role === 'admin' ? '⭐ Admin' : 'Employé'}</div>
+            <div className="user-role" style={{ fontSize: '0.68rem', color: 'rgba(148,174,207,0.7)' }}>
+              {user?.role === 'admin' ? '⭐ Admin' : 'Employé'} · Mon profil
+            </div>
           </div>
           <button
             className="btn btn-ghost btn-icon btn-sm"
-            onClick={handleLogout}
+            onClick={e => { e.stopPropagation(); handleLogout() }}
             data-tooltip="Déconnexion"
             style={{ color: 'var(--sidebar-text)' }}
           >

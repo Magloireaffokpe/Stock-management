@@ -72,6 +72,7 @@ class Sale(models.Model):
         ('cash',     'Espèces'),
         ('mtn',      'MTN Mobile Money'),
         ('moov',     'Moov Money'),
+        ('celtiis',  'Celtiis Money'),
         ('card',     'Carte bancaire'),
         ('transfer', 'Virement'),
         ('mixed',    'Mixte'),
@@ -81,7 +82,7 @@ class Sale(models.Model):
     client         = models.ForeignKey(
         Client, on_delete=models.SET_NULL, null=True, blank=True, related_name='sales'
     )
-    sale_date      = models.DateTimeField(default=timezone.now)
+    sale_date      = models.DateTimeField(default=timezone.now, db_index=True)
     subtotal       = models.DecimalField(max_digits=14, decimal_places=0)
     discount       = models.DecimalField(max_digits=14, decimal_places=0, default=0)
     tax_amount     = models.DecimalField(max_digits=14, decimal_places=0, default=0)
@@ -100,7 +101,7 @@ class Sale(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, related_name='created_sales'
     )
-    created_at     = models.DateTimeField(auto_now_add=True)
+    created_at     = models.DateTimeField(auto_now_add=True, db_index=True)
     pdf_file       = models.FileField(upload_to='factures/', blank=True, null=True)
 
     class Meta:
@@ -131,6 +132,9 @@ class SaleItem(models.Model):
 
     class Meta:
         verbose_name = 'Ligne de vente'
+        indexes = [
+            models.Index(fields=['sale', 'product']),
+        ]
 
     @property
     def margin(self):

@@ -129,8 +129,16 @@ function RestockModal({ currency, onClose, onSaved }) {
       ? { ...it, product_id: product.id, product_name: product.name, unit_cost: product.purchase_price }
       : it
     ))
-    setProductSearch(s => ({ ...s, [idx]: product.name }))
+    setProductSearch(s => ({ ...s, [idx]: '' }))
     setProductResults(r => ({ ...r, [idx]: [] }))
+  }
+
+  const clearProduct = (idx) => {
+    setItems(prev => prev.map((it, i) => i === idx
+      ? { ...it, product_id: '', product_name: '', unit_cost: '' }
+      : it
+    ))
+    setProductSearch(s => ({ ...s, [idx]: '' }))
   }
 
   const updateItem = (idx, field, value) => {
@@ -145,6 +153,8 @@ function RestockModal({ currency, onClose, onSaved }) {
   const handleSave = async () => {
     const valid = items.filter(i => i.product_id && i.quantity > 0 && i.unit_cost > 0)
     if (!valid.length) { toast.error('Ajoutez au moins un produit valide'); return }
+    if (!confirm('Confirmez-vous ce réapprovisionnement ? Le stock sera augmenté de façon irréversible.')) return
+    
     setSaving(true)
     try {
       await salesAPI.createRestock({
@@ -198,33 +208,50 @@ function RestockModal({ currency, onClose, onSaved }) {
           {items.map((item, idx) => (
             <div key={idx} style={{ display:'flex', gap:10, marginBottom:10, alignItems:'flex-start' }}>
               <div style={{ flex:3, position:'relative' }}>
-                <input
-                  className="input"
-                  placeholder="Rechercher un produit…"
-                  value={productSearch[idx] ?? item.product_name}
-                  onChange={e => searchProduct(idx, e.target.value)}
-                />
-                {(productResults[idx]?.length > 0) && (
-                  <div style={{
-                    position:'absolute', top:'100%', left:0, right:0, zIndex:50,
-                    background:'white', border:'1px solid var(--border)',
-                    borderRadius:'var(--radius-md)', boxShadow:'var(--shadow-lg)',
-                    maxHeight:200, overflowY:'auto',
-                  }}>
-                    {productResults[idx].map(p => (
-                      <div key={p.id}
-                        onClick={() => selectProduct(idx, p)}
-                        style={{ padding:'8px 12px', cursor:'pointer', fontSize:'0.82rem', borderBottom:'1px solid var(--border)' }}
-                        onMouseEnter={e => e.currentTarget.style.background='var(--blue-50)'}
-                        onMouseLeave={e => e.currentTarget.style.background=''}
-                      >
-                        <strong>{p.name}</strong>
-                        <span style={{ color:'var(--text-muted)', marginLeft:8, fontFamily:'var(--font-mono)', fontSize:'0.75rem' }}>
-                          Stock: {p.stock_quantity} — Achat: {formatCurrency(p.purchase_price, currency)}
-                        </span>
+                {item.product_id ? (
+                  <div style={{ display:'flex', alignItems:'center', background:'var(--bg-input)', padding:'8px 12px', borderRadius:'var(--radius-md)', border:'1px solid var(--border)' }}>
+                    <span style={{ flex:1, fontSize:'0.85rem', fontWeight:600 }}>{item.product_name}</span>
+                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => clearProduct(idx)}><X size={14} /></button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      className="input"
+                      placeholder="Rechercher un produit (sélection obligatoire)…"
+                      value={productSearch[idx] || ''}
+                      onChange={e => searchProduct(idx, e.target.value)}
+                    />
+                    {(productResults[idx]?.length > 0) ? (
+                      <div style={{
+                        position:'absolute', top:'100%', left:0, right:0, zIndex:50,
+                        background:'white', border:'1px solid var(--border)',
+                        borderRadius:'var(--radius-md)', boxShadow:'var(--shadow-lg)',
+                        maxHeight:200, overflowY:'auto',
+                      }}>
+                        {productResults[idx].map(p => (
+                          <div key={p.id}
+                            onClick={() => selectProduct(idx, p)}
+                            style={{ padding:'8px 12px', cursor:'pointer', fontSize:'0.82rem', borderBottom:'1px solid var(--border)' }}
+                            onMouseEnter={e => e.currentTarget.style.background='var(--blue-50)'}
+                            onMouseLeave={e => e.currentTarget.style.background=''}
+                          >
+                            <strong>{p.name}</strong>
+                            <span style={{ color:'var(--text-muted)', marginLeft:8, fontFamily:'var(--font-mono)', fontSize:'0.75rem' }}>
+                              Stock: {p.stock_quantity} — Achat: {formatCurrency(p.purchase_price, currency)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (productSearch[idx]?.length > 1 && (
+                      <div style={{
+                        position:'absolute', top:'100%', left:0, right:0, zIndex:50,
+                        background:'white', border:'1px solid var(--border)', padding:'10px 12px',
+                        borderRadius:'var(--radius-md)', boxShadow:'var(--shadow-lg)', fontSize:'0.82rem', color:'var(--danger)'
+                      }}>
+                        Produit introuvable. Veuillez le créer dans le catalogue d'abord.
                       </div>
                     ))}
-                  </div>
+                  </>
                 )}
               </div>
               <div style={{ flex:1 }}>

@@ -3,20 +3,21 @@ import {
   Search, Eye, XCircle, Download, RefreshCw,
   Receipt, X, Calendar
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { salesAPI, reportsAPI, formatCurrency, formatDatetime, downloadBlob } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
 import useAuthStore from '../../store/authStore'
 import toast from 'react-hot-toast'
 
 const PAYMENT_LABELS = {
-  cash:'Espèces',mtn:'MTN MoMo',moov:'Moov Money',
-  card:'Carte',transfer:'Virement',mixed:'Mixte',
+  cash:'Espèces', mtn:'MTN MoMo', moov:'Moov Money',
+  celtiis:'Celtiis Money', card:'Carte', transfer:'Virement', mixed:'Mixte',
 }
 
 export default function SalesPage() {
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
   const isAdmin  = useAuthStore(s => s.isAdmin())
+  const navigate = useNavigate()
   const [sales, setSales]       = useState([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
@@ -27,13 +28,13 @@ export default function SalesPage() {
   const [page, setPage]         = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [exporting, setExporting] = useState(false)
-  const PAGE_SIZE = 25
+  const [pageSize, setPageSize]   = useState(25)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const params = {
-        page, page_size: PAGE_SIZE, ordering: '-created_at',
+        page, page_size: pageSize, ordering: '-created_at',
         ...(search && { search }),
         ...(payFilter && { payment_method: payFilter }),
         ...(statusFilter !== '' && { is_cancelled: statusFilter }),
@@ -45,7 +46,7 @@ export default function SalesPage() {
       setTotalCount(res.data?.count ?? 0)
     } catch { toast.error('Erreur chargement') }
     finally { setLoading(false) }
-  }, [page, search, payFilter, statusFilter, dateFrom, dateTo])
+  }, [page, search, payFilter, statusFilter, dateFrom, dateTo, pageSize])
 
   useEffect(() => { load() }, [load])
 
@@ -68,7 +69,7 @@ export default function SalesPage() {
     finally { setExporting(false) }
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+  const totalPages = Math.ceil(totalCount / pageSize)
   const hasFilters = search || payFilter || statusFilter !== '' || dateFrom || dateTo
 
   return (
@@ -117,6 +118,17 @@ export default function SalesPage() {
             setSearch(''); setPayFilter(''); setStatusFilter(''); setDateFrom(''); setDateTo(''); setPage(1)
           }}><X size={13} /> Réinitialiser</button>
         )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Par page :</span>
+          <select
+            className="input"
+            style={{ width: 70, padding: '4px 8px', fontSize: '0.8rem' }}
+            value={pageSize}
+            onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+          >
+            {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="card">
@@ -134,7 +146,7 @@ export default function SalesPage() {
               </tr></thead>
               <tbody>
                 {sales.map(s => (
-                  <tr key={s.id} style={{ opacity: s.is_cancelled ? 0.55 : 1 }}>
+                  <tr key={s.id} onClick={() => navigate(`/sales/${s.id}`)} style={{ opacity: s.is_cancelled ? 0.55 : 1, cursor: 'pointer' }}>
                     <td><span className="td-mono" style={{ color:'var(--blue-600)', fontSize:'0.82rem' }}>{s.invoice_number}</span></td>
                     <td style={{ fontSize:'0.8rem', color:'var(--text-secondary)' }}>{formatDatetime(s.created_at)}</td>
                     <td style={{ fontSize:'0.85rem' }}>{s.client_name || 'Comptoir'}</td>
@@ -152,14 +164,16 @@ export default function SalesPage() {
                       <div style={{ display:'flex', gap:4 }}>
                         <Link to={`/sales/${s.id}`} className="btn btn-ghost btn-icon btn-sm" data-tooltip="Détail"><Eye size={14} /></Link>
                         {!s.is_cancelled && isAdmin && (
-                          <button className="btn btn-ghost btn-icon btn-sm" onClick={() => handleCancel(s)} data-tooltip="Annuler">
+                          <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); handleCancel(s); }} data-tooltip="Annuler">
                             <XCircle size={14} style={{ color:'var(--danger)' }} />
                           </button>
                         )}
-                        <a href={`/api/reports/invoice/${s.id}/pdf/`} target="_blank" rel="noopener"
-                          className="btn btn-ghost btn-icon btn-sm" data-tooltip="Facture PDF">
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm" data-tooltip="Facture PDF"
+                          onClick={(e) => { e.stopPropagation(); reportsAPI.invoicePDF(s.id); }}
+                        >
                           <Download size={14} />
-                        </a>
+                        </button>
                       </div>
                     </td>
                   </tr>

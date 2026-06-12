@@ -123,3 +123,46 @@ class ManualBackupView(APIView):
             old.unlink()
 
         return Response({'message': f'Sauvegarde créée : {dest.name}'})
+
+
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
+from .models import AuditLog
+from .serializers import AuditLogSerializer
+
+class AuditLogPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+class AuditLogListView(ListAPIView):
+    """
+    Liste les journaux d'audit (Admin seulement).
+    Filtrable par action_type, user_id, date.
+    """
+    permission_classes = [IsAdminUser]
+    serializer_class = AuditLogSerializer
+    pagination_class = AuditLogPagination
+
+    def get_queryset(self):
+        qs = AuditLog.objects.select_related('user').all()
+        
+        action_type = self.request.query_params.get('action_type')
+        user_id = self.request.query_params.get('user_id')
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+        search = self.request.query_params.get('search')
+        
+        if action_type:
+            qs = qs.filter(action_type=action_type)
+        if user_id:
+            qs = qs.filter(user_id=user_id)
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+        if search:
+            qs = qs.filter(description__icontains=search)
+            
+        return qs
+

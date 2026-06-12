@@ -43,7 +43,7 @@ class SaleListView(generics.ListAPIView):
     ordering_fields = ['created_at', 'total_amount', 'sale_date']
 
     def get_queryset(self):
-        qs = Sale.objects.select_related('client', 'created_by').all()
+        qs = Sale.objects.prefetch_related('items__product').select_related('client', 'created_by').all()
 
         date_from = self.request.query_params.get('date_from')
         date_to   = self.request.query_params.get('date_to')
@@ -136,6 +136,10 @@ class SaleCreateView(APIView):
             )
 
         sale.refresh_from_db()
+        
+        from apps.settings_app.utils import log_audit_action
+        log_audit_action(request, 'sale', f"Vente #{sale.invoice_number} enregistrée ({total} {store.currency})")
+        
         return Response(
             SaleSerializer(sale).data,
             status=status.HTTP_201_CREATED
@@ -188,6 +192,9 @@ class SaleCancelView(APIView):
         sale.cancelled_by = user
         sale.save(update_fields=['is_cancelled', 'cancelled_at', 'cancelled_by'])
 
+        from apps.settings_app.utils import log_audit_action
+        log_audit_action(request, 'update', f"Annulation de la vente #{sale.invoice_number}")
+
         return Response(SaleSerializer(sale).data)
 
 
@@ -228,44 +235,74 @@ class QuotationConvertView(APIView):
         if quotation.status not in ('draft', 'sent'):
             return Response({'error': 'Ce devis ne peut plus être converti'}, status=400)
 
-        # Préparer la data pour créer la vente
-        items_data = []
+        from apps.catalog.models import Product
+        from apps.settings_app.models import StoreSettings
+
+        # Vérification des stocks
+        products = {}
         for item in quotation.items.select_related('product').all():
-            items_data.append({
-                'product_id': item.product_id,
-                'quantity':   item.quantity,
-                'unit_price': item.unit_price,
-            })
+            try:
+                product = Product.objects.select_for_update().get(id=item.product_id, is_active=True)
+            except Product.DoesNotExist:
+                return Response({'error': f"Produit introuvable ou inactif pour le devis"}, status=400)
+            
+            if product.stock_quantity < item.quantity:
+                return Response(
+                    {'error': f"Conversion impossible : stock insuffisant pour « {product.name} » (dispo: {product.stock_quantity})"},
+                    status=400
+                )
+            products[item.product_id] = product
 
-        sale_data = {
-            'client_id':      quotation.client_id,
-            'items':          items_data,
-            'payment_method': request.data.get('payment_method', 'cash'),
-            'amount_paid':    request.data.get('amount_paid', quotation.total_amount),
-            'discount':       0,
-        }
+        store = StoreSettings.get()
+        subtotal = sum(item.unit_price * item.quantity for item in quotation.items.all())
+        discount = Decimal('0')
+        tax_amount = ((subtotal - discount) * store.tax_rate / 100).quantize(Decimal('1'))
+        total = subtotal - discount + tax_amount
 
-        sale_view = SaleCreateView()
-        sale_view.request = request
-        from rest_framework.request import Request
-        from django.test import RequestFactory
-        inner_request = Request(request._request)
-        inner_request._full_data = sale_data
+        # Gestion des paiements
+        try:
+            amount_paid = Decimal(request.data.get('amount_paid', total))
+        except (ValueError, TypeError):
+            amount_paid = total
+        change_given = max(amount_paid - total, Decimal('0'))
 
-        # Créer la vente directement
-        sale_serializer = SaleCreateSerializer(data=sale_data)
-        sale_serializer.is_valid(raise_exception=True)
+        # Création de la vente
+        sale = Sale.objects.create(
+            client_id=quotation.client_id,
+            subtotal=subtotal,
+            discount=discount,
+            tax_amount=tax_amount,
+            total_amount=total,
+            payment_method=request.data.get('payment_method', 'cash'),
+            amount_paid=amount_paid,
+            change_given=change_given,
+            notes=f"Converti depuis le devis {quotation.quotation_number}",
+            created_by=request.user,
+        )
 
-        # Déléguer au même code de création
-        response = SaleCreateView().post(request)
-        if response.status_code == 201:
-            sale_id = response.data['id']
-            sale    = Sale.objects.get(id=sale_id)
-            quotation.status = 'accepted'
-            quotation.converted_to_sale = sale
-            quotation.save(update_fields=['status', 'converted_to_sale'])
+        # Création des lignes (les signals décrémenteront le stock)
+        for item in quotation.items.all():
+            product = products[item.product_id]
+            SaleItem.objects.create(
+                sale=sale,
+                product=product,
+                product_name=product.name,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                purchase_price=product.purchase_price,
+                subtotal=item.unit_price * item.quantity,
+            )
 
-        return response
+        # Mise à jour du devis
+        quotation.status = 'accepted'
+        quotation.converted_to_sale = sale
+        quotation.save(update_fields=['status', 'converted_to_sale'])
+
+        from apps.settings_app.utils import log_audit_action
+        log_audit_action(request, 'conversion', f"Conversion du devis #{quotation.quotation_number} en vente #{sale.invoice_number}")
+
+        sale.refresh_from_db()
+        return Response(SaleSerializer(sale).data, status=status.HTTP_201_CREATED)
 
 
 # ── RÉAPPROS ──────────────────────────────────────────────────────
@@ -324,6 +361,9 @@ class RestockCreateView(APIView):
                 quantity=item['quantity'],
                 unit_cost=item['unit_cost'],
             )
+
+        from apps.settings_app.utils import log_audit_action
+        log_audit_action(request, 'restock', f"Réapprovisionnement #{restock.reference} enregistré ({total_cost})")
 
         return Response(
             RestockSerializer(restock).data,

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Download, XCircle, Package } from 'lucide-react'
-import { salesAPI, formatCurrency, formatDatetime } from '../../api'
+import { salesAPI, reportsAPI, formatCurrency, formatDatetime } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
 import useAuthStore from '../../store/authStore'
 import toast from 'react-hot-toast'
 
-const PAYMENT_LABELS = { cash:'Espèces',mtn:'MTN MoMo',moov:'Moov Money',card:'Carte',transfer:'Virement',mixed:'Mixte' }
+const PAYMENT_LABELS = { cash:'Espèces', mtn:'MTN MoMo', moov:'Moov Money', celtiis:'Celtiis Money', card:'Carte', transfer:'Virement', mixed:'Mixte' }
 
 export default function SaleDetailPage() {
   const { id } = useParams()
@@ -49,9 +49,12 @@ export default function SaleDetailPage() {
           {sale.is_cancelled && <span className="badge badge-grey" style={{ fontSize:'0.85rem', padding:'6px 14px' }}>ANNULÉE</span>}
         </div>
         <div className="page-header-actions">
-          <a href={`/api/reports/invoice/${sale.id}/pdf/`} target="_blank" rel="noopener" className="btn btn-outline">
+          <button
+            className="btn btn-outline"
+            onClick={() => reportsAPI.invoicePDF(sale.id)}
+          >
             <Download size={15} /> Facture PDF
-          </a>
+          </button>
           {!sale.is_cancelled && isAdmin && (
             <button className="btn btn-danger btn-sm" onClick={handleCancel}>
               <XCircle size={15} /> Annuler la vente
@@ -69,6 +72,7 @@ export default function SaleDetailPage() {
               <table>
                 <thead><tr>
                   <th>Produit</th>
+                  <th>Fournisseur</th>
                   <th style={{textAlign:'center'}}>Qté</th>
                   <th style={{textAlign:'right'}}>Prix unit.</th>
                   <th style={{textAlign:'right'}}>Sous-total</th>
@@ -81,6 +85,9 @@ export default function SaleDetailPage() {
                       <tr key={item.id}>
                         <td>
                           <div style={{ fontWeight:600, fontSize:'0.875rem' }}>{item.product_name}</div>
+                        </td>
+                        <td>
+                          <div style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{item.supplier_name || '—'}</div>
                         </td>
                         <td style={{ textAlign:'center' }}>
                           <span style={{ fontFamily:'var(--font-mono)', fontWeight:700 }}>{item.quantity}</span>

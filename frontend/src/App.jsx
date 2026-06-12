@@ -9,6 +9,8 @@ import LoginPage from './pages/Auth/LoginPage'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import POSPage from './pages/POS/POSPage'
 import CatalogPage from './pages/Catalog/CatalogPage'
+import ProductDetailPage from './pages/Catalog/ProductDetailPage'
+import SuppliersPage from './pages/Catalog/SuppliersPage'
 import SalesPage from './pages/Sales/SalesPage'
 import SaleDetailPage from './pages/Sales/SaleDetailPage'
 import RestocksPage from './pages/Sales/RestocksPage'
@@ -16,6 +18,9 @@ import StockPage from './pages/Stock/StockPage'
 import ClientsPage from './pages/Clients/ClientsPage'
 import ReportsPage from './pages/Reports/ReportsPage'
 import SettingsPage from './pages/Settings/SettingsPage'
+import AuditLogPage from './pages/Settings/AuditLogPage'
+import ProfilePage from './pages/Settings/ProfilePage'
+import LexiquePage from './pages/Help/LexiquePage'
 
 function RequireAuth({ children }) {
   const { accessToken, initialized } = useAuthStore()
@@ -32,6 +37,7 @@ function RequireAdmin({ children }) {
 
 export default function App() {
   const { accessToken, fetchMe, initialized } = useAuthStore()
+  const settings = useSettingsStore(s => s.settings)
   const fetchSettings = useSettingsStore(s => s.fetch)
   const { fetchCount, connectWS } = useAlertStore()
 
@@ -45,6 +51,22 @@ export default function App() {
       useAuthStore.setState({ initialized: true })
     }
   }, [accessToken])
+
+  // Applique les couleurs de thème configurées dans la base aux variables CSS
+  useEffect(() => {
+    if (settings) {
+      if (settings.color_primary) {
+        document.documentElement.style.setProperty('--sidebar-bg', settings.color_primary)
+      }
+      if (settings.color_accent) {
+        document.documentElement.style.setProperty('--blue-600', settings.color_accent)
+        document.documentElement.style.setProperty('--sidebar-active', settings.color_accent)
+      }
+      if (settings.color_success) {
+        document.documentElement.style.setProperty('--success', settings.color_success)
+      }
+    }
+  }, [settings])
 
   // Logout on auth events
   useEffect(() => {
@@ -69,6 +91,8 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="pos" element={<POSPage />} />
         <Route path="catalog" element={<CatalogPage />} />
+        <Route path="catalog/:id" element={<ProductDetailPage />} />
+        <Route path="suppliers" element={<SuppliersPage />} />
         <Route path="sales" element={<SalesPage />} />
         <Route path="sales/:id" element={<SaleDetailPage />} />
         <Route path="restocks" element={<RestocksPage />} />
@@ -76,6 +100,9 @@ export default function App() {
         <Route path="clients" element={<ClientsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
+        <Route path="audit" element={<RequireAdmin><AuditLogPage /></RequireAdmin>} />
+        <Route path="profile" element={<ProfilePage />} />
+        <Route path="lexique" element={<LexiquePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

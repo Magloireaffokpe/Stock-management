@@ -12,6 +12,7 @@ class ProductFilter(django_filters.FilterSet):
     condition     = django_filters.CharFilter(field_name='condition')
     is_active     = django_filters.BooleanFilter(field_name='is_active')
     is_featured   = django_filters.BooleanFilter(field_name='is_featured')
+    min_stock     = django_filters.NumberFilter(field_name='stock_quantity', lookup_expr='gte')
 
     class Meta:
         model = Product

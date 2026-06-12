@@ -164,11 +164,24 @@ p  { line-height: 1.65; }
   flex-shrink: 0;
 }
 
-.sidebar-logo img {
-  height: 38px;
-  width: auto;
+.sidebar-logo-container {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-logo-container img {
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
-  filter: brightness(0) invert(1);
 }
 
 .sidebar-logo-text {

@@ -6,11 +6,11 @@ echo.
 echo  Démarrage de MICROLOGIS Stock Manager...
 echo.
 
-:: Démarrer Django en arrière-plan
-start "MICROLOGIS Backend" cmd /k "cd /d %~dp0backend && python manage.py runserver 0.0.0.0:8000"
+:: Démarrer Django en arrière-plan (avec le venv activé)
+start "MICROLOGIS Backend" cmd /k "cd /d %~dp0backend && call venv\Scripts\activate.bat && python manage.py runserver 0.0.0.0:8000"
 
-:: Attendre que Django soit prêt
-timeout /t 3 /nobreak > nul
+:: Attendre que Django soit prêt (un peu plus longtemps pour charger)
+timeout /t 5 /nobreak > nul
 
 :: Démarrer React Vite
 start "MICROLOGIS Frontend" cmd /k "cd /d %~dp0frontend && npm run dev"

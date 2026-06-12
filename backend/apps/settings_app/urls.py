@@ -7,4 +7,5 @@ urlpatterns = [
     path('backup/restore/', views.DatabaseRestoreView.as_view(), name='db-restore'),
     path('backup/list/', views.BackupListView.as_view(), name='backup-list'),
     path('backup/manual/', views.ManualBackupView.as_view(), name='manual-backup'),
+    path('audit/', views.AuditLogListView.as_view(), name='audit-log-list'),
 ]

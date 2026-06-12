@@ -26,7 +26,13 @@ class Category(models.Model):
 
     @property
     def product_count(self):
+        if hasattr(self, '_product_count'):
+            return self._product_count
         return self.products.filter(is_active=True).count()
+
+    @product_count.setter
+    def product_count(self, value):
+        self._product_count = value
 
 
 class SubCategory(models.Model):
@@ -67,7 +73,13 @@ class Supplier(models.Model):
 
     @property
     def product_count(self):
+        if hasattr(self, '_product_count'):
+            return self._product_count
         return self.products.filter(is_active=True).count()
+
+    @product_count.setter
+    def product_count(self, value):
+        self._product_count = value
 
 
 class Product(models.Model):
@@ -77,7 +89,7 @@ class Product(models.Model):
         ('refurbished', 'Reconditionné'),
     ]
 
-    name             = models.CharField(max_length=200)
+    name             = models.CharField(max_length=200, db_index=True)
     slug             = models.SlugField(unique=True)
     sku              = models.CharField(max_length=50, unique=True, blank=True)
     category         = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='products')
@@ -95,7 +107,7 @@ class Product(models.Model):
     supplier         = models.ForeignKey(
         Supplier, on_delete=models.SET_NULL, null=True, blank=True, related_name='products'
     )
-    is_active        = models.BooleanField(default=True)
+    is_active        = models.BooleanField(default=True, db_index=True)
     is_featured      = models.BooleanField(default=False)
     date_added       = models.DateTimeField(auto_now_add=True)
     last_updated     = models.DateTimeField(auto_now=True)

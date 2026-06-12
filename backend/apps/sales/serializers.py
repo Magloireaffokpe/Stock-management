@@ -17,11 +17,13 @@ class ClientSerializer(serializers.ModelSerializer):
 # ── VENTES ────────────────────────────────────────────────────────
 
 class SaleItemSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='product.supplier.name', read_only=True)
+
     class Meta:
         model = SaleItem
         fields = ['id', 'product', 'product_name', 'quantity',
-                  'unit_price', 'purchase_price', 'subtotal']
-        read_only_fields = ['product_name', 'purchase_price', 'subtotal']
+                  'unit_price', 'purchase_price', 'subtotal', 'supplier_name']
+        read_only_fields = ['product_name', 'purchase_price', 'subtotal', 'supplier_name']
 
 
 class SaleItemWriteSerializer(serializers.Serializer):

@@ -37,7 +37,10 @@ class CategoryListCreateView(generics.ListCreateAPIView):
     ordering_fields = ['order', 'name']
 
     def get_queryset(self):
-        qs = Category.objects.prefetch_related('subcategories').all()
+        from django.db.models import Count, Q
+        qs = Category.objects.prefetch_related('subcategories').annotate(
+            product_count=Count('products', filter=Q(products__is_active=True))
+        )
         if self.request.query_params.get('active_only'):
             qs = qs.filter(is_active=True)
         return qs
@@ -78,7 +81,10 @@ class SupplierListCreateView(generics.ListCreateAPIView):
     ordering_fields = ['name', 'date_added']
 
     def get_queryset(self):
-        qs = Supplier.objects.all()
+        from django.db.models import Count, Q
+        qs = Supplier.objects.annotate(
+            product_count=Count('products', filter=Q(products__is_active=True))
+        )
         if self.request.query_params.get('active_only'):
             qs = qs.filter(is_active=True)
         return qs
@@ -107,6 +113,8 @@ class ProductListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         product = serializer.save()
+        from apps.settings_app.utils import log_audit_action
+        log_audit_action(self.request, 'create', f"Création du produit « {product.name} »")
         # Enregistrer le stock initial comme mouvement
         if product.stock_quantity > 0:
             from apps.stock.models import StockMovement
@@ -129,11 +137,37 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return Product.objects.select_related('category', 'subcategory', 'supplier').all()
 
+    def perform_update(self, serializer):
+        from django.db import transaction
+        with transaction.atomic():
+            instance = self.get_object()
+            old_stock = instance.stock_quantity
+            product = serializer.save()
+            
+            from apps.settings_app.utils import log_audit_action
+            log_audit_action(self.request, 'update', f"Modification du produit « {product.name} »")
+            
+            if product.stock_quantity != old_stock:
+                from apps.stock.models import StockMovement
+                StockMovement.objects.create(
+                    product=product,
+                    movement_type='correction',
+                    quantity=product.stock_quantity - old_stock,
+                    stock_before=old_stock,
+                    stock_after=product.stock_quantity,
+                    note='Modification manuelle via formulaire produit',
+                    created_by=self.request.user,
+                )
+
     def destroy(self, request, *args, **kwargs):
         """Soft delete — désactiver plutôt que supprimer"""
         instance = self.get_object()
         instance.is_active = False
         instance.save(update_fields=['is_active'])
+        
+        from apps.settings_app.utils import log_audit_action
+        log_audit_action(request, 'delete', f"Désactivation (suppression) du produit « {instance.name} »")
+        
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
