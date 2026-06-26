@@ -1,118 +1,196 @@
 @echo off
-chcp 65001 > nul
+SETLOCAL EnableDelayedExpansion
+chcp 65001 > nul 2>&1
 title Installation - MICROLOGIS Stock Manager
 
-echo =======================================================
+echo.
+echo  =======================================================
 echo     INSTALLATION DE MICROLOGIS STOCK MANAGER
-echo =======================================================
+echo  =======================================================
 echo.
 
-:: 1. Vérification de Python
-echo [1/5] Vérification de Python...
+:: ─────────────────────────────────────────────────────────
+:: Détection de la commande Python (python ou py)
+:: ─────────────────────────────────────────────────────────
+set "PYTHON_CMD="
+
 python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERREUR] Python n'est pas installé ou n'est pas ajouté au PATH.
-    echo Veuillez installer Python (version 3.10 ou supérieure) : https://www.python.org/downloads/
-    goto error
+if !errorlevel! equ 0 (
+    set "PYTHON_CMD=python"
+    goto :python_found
 )
-echo ✓ Python est installé.
-echo.
 
-:: 2. Vérification de Node.js et NPM
-echo [2/5] Vérification de Node.js et NPM...
+py --version >nul 2>&1
+if !errorlevel! equ 0 (
+    set "PYTHON_CMD=py"
+    goto :python_found
+)
+
+echo.
+echo  [ERREUR] Python n'est pas detecte sur ce PC.
+echo  Veuillez installer Python 3.10+ et l'ajouter au PATH.
+echo  Telechargement : https://www.python.org/downloads/
+echo.
+goto :error
+
+:python_found
+for /f "tokens=*" %%V in ('!PYTHON_CMD! --version 2^>^&1') do set "PY_VER=%%V"
+echo  [OK] %PY_VER% detecte (commande: !PYTHON_CMD!)
+
+:: ─────────────────────────────────────────────────────────
+:: Vérification de Node.js
+:: ─────────────────────────────────────────────────────────
 node -v >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERREUR] Node.js n'est pas installé ou n'est pas ajouté au PATH.
-    echo Veuillez installer Node.js (version LTS) : https://nodejs.org/
-    goto error
+if !errorlevel! neq 0 (
+    echo.
+    echo  [ERREUR] Node.js n'est pas detecte sur ce PC.
+    echo  Veuillez installer Node.js LTS : https://nodejs.org/
+    echo.
+    goto :error
 )
-echo ✓ Node.js et NPM sont installés.
+for /f "tokens=*" %%V in ('node -v 2^>^&1') do set "NODE_VER=%%V"
+echo  [OK] Node.js %NODE_VER% detecte
 echo.
 
-:: 3. Création de l'environnement virtuel Python (Backend)
-echo [3/5] Création de l'environnement virtuel Python...
+:: ─────────────────────────────────────────────────────────
+:: ÉTAPE 1 — Environnement virtuel Python
+:: ─────────────────────────────────────────────────────────
+echo  [1/5] Creation de l'environnement virtuel Python...
+
 if not exist "backend\venv" (
-    python -m venv backend\venv
-    if %errorlevel% neq 0 (
-        echo [ERREUR] Impossible de créer l'environnement virtuel.
-        goto error
+    !PYTHON_CMD! -m venv "backend\venv"
+    if !errorlevel! neq 0 (
+        echo  [ERREUR] Impossible de creer l'environnement virtuel.
+        goto :error
     )
-    echo ✓ Environnement virtuel créé avec succès.
+    echo  [OK] Environnement virtuel cree.
 ) else (
-    echo ✓ Environnement virtuel déjà existant.
+    echo  [OK] Environnement virtuel deja existant.
 )
 echo.
 
-:: Activation et installation des dépendances backend
-echo Installation des dépendances backend...
-call backend\venv\Scripts\activate.bat
-python -m pip install --upgrade pip
-pip install -r backend\requirements.txt
-if %errorlevel% neq 0 (
-    echo [ERREUR] Échec de l'installation des dépendances Python.
-    goto error
+:: ─────────────────────────────────────────────────────────
+:: ÉTAPE 2 — Dépendances backend (pip)
+:: ─────────────────────────────────────────────────────────
+echo  [2/5] Installation des dependances backend...
+
+call "backend\venv\Scripts\activate.bat"
+if !errorlevel! neq 0 (
+    echo  [ERREUR] Impossible d'activer l'environnement virtuel.
+    goto :error
 )
-echo ✓ Dépendances backend installées.
+
+python -m pip install --upgrade pip --quiet >nul 2>&1
+pip install -r "backend\requirements.txt" --quiet
+if !errorlevel! neq 0 (
+    echo  [ERREUR] Echec de l'installation des dependances Python.
+    echo  Verifiez le fichier backend\requirements.txt
+    goto :error
+)
+echo  [OK] Dependances backend installees.
 echo.
 
-:: Migrations et initialisation de la base de données
-echo Préparation de la base de données...
-python backend\manage.py migrate
-if %errorlevel% neq 0 (
-    echo [ERREUR] Échec des migrations de base de données.
-    goto error
+:: ─────────────────────────────────────────────────────────
+:: ÉTAPE 3 — Migrations + données initiales
+:: ─────────────────────────────────────────────────────────
+echo  [3/5] Preparation de la base de donnees...
+
+python "backend\manage.py" migrate --run-syncdb >nul 2>&1
+if !errorlevel! neq 0 (
+    python "backend\manage.py" migrate
+    if !errorlevel! neq 0 (
+        echo  [ERREUR] Echec des migrations de base de donnees.
+        goto :error
+    )
 )
-echo ✓ Migrations terminées.
+echo  [OK] Migrations terminees.
 
 if exist "backend\initial_data.json" (
-    echo Chargement des données initiales...
-    :: Le fichier est cherché relativement au dossier de manage.py (backend\)
-    python backend\manage.py loaddata initial_data.json
-    if %errorlevel% neq 0 (
-        echo [AVERTISSEMENT] Données initiales non chargées (peut-etre deja chargees).
+    echo        Chargement des donnees initiales...
+    python "backend\manage.py" loaddata initial_data.json >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo  [OK] Donnees initiales chargees.
     ) else (
-        echo ✓ Données initiales chargées.
+        echo  [INFO] Donnees initiales deja presentes ou non applicables.
     )
 )
 
-:: Création du compte administrateur
-echo Création du compte administrateur...
-python backend\manage.py shell -c "from django.contrib.auth import get_user_model; U=get_user_model(); U.objects.filter(username='admin').exists() or U.objects.create_superuser('admin','admin@micrologis.bj','micrologis2026',role='admin'); print('Admin OK')"
-echo ✓ Compte admin prêt  (login: admin / mot de passe: micrologis2026)
+:: ─────────────────────────────────────────────────────────
+:: Création automatique du superuser admin
+:: ─────────────────────────────────────────────────────────
 echo.
-echo.
+echo        Creation du compte administrateur...
 
-:: 4. Installation des dépendances frontend
-echo [4/5] Installation des dépendances frontend (npm install)...
-cd frontend
-call npm install
-if %errorlevel% neq 0 (
-    echo [ERREUR] Échec de l'installation des modules Node.js.
-    cd ..
-    goto error
+python "backend\manage.py" shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); exists = User.objects.filter(username='admin').exists(); exec('') if exists else User.objects.create_superuser(username='admin', email='admin@micrologis.local', password='micrologis2026', role='admin', first_name='Admin', last_name='MICROLOGIS'); print('DEJA_EXISTANT' if exists else 'CREE')" 2>nul | findstr /C:"CREE" >nul 2>&1
+
+if !errorlevel! equ 0 (
+    echo  [OK] Compte administrateur cree avec succes.
+    echo.
+    echo  -------------------------------------------------------
+    echo    IDENTIFIANTS ADMINISTRATEUR
+    echo    Nom d'utilisateur : admin
+    echo    Mot de passe      : micrologis2026
+    echo  -------------------------------------------------------
+    echo    IMPORTANT : Changez ce mot de passe apres connexion !
+    echo  -------------------------------------------------------
+    echo.
+) else (
+    echo  [OK] Compte administrateur deja existant.
+    echo.
 )
-cd ..
-echo ✓ Dépendances frontend installées.
+
+:: ─────────────────────────────────────────────────────────
+:: ÉTAPE 4 — Dépendances frontend (npm)
+:: ─────────────────────────────────────────────────────────
+echo  [4/5] Installation des dependances frontend...
+
+pushd "frontend"
+if !errorlevel! neq 0 (
+    echo  [ERREUR] Dossier frontend introuvable.
+    goto :error
+)
+
+call npm install --loglevel=error
+if !errorlevel! neq 0 (
+    echo  [ERREUR] Echec de l'installation des modules Node.js.
+    popd
+    goto :error
+)
+popd
+
+echo  [OK] Dependances frontend installees.
 echo.
 
-:: 5. Fin de l'installation
-echo [5/5] Finalisation...
-echo =======================================================
-echo    ✓ INSTALLATION TERMINÉE AVEC SUCCÈS !
-echo =======================================================
+:: ─────────────────────────────────────────────────────────
+:: ÉTAPE 5 — Terminé
+:: ─────────────────────────────────────────────────────────
+echo  [5/5] Finalisation...
 echo.
-echo  Vous pouvez démarrer l'application en lançant :
-echo    - start.bat (ou double-clic dessus)
+echo  =======================================================
+echo     INSTALLATION TERMINEE AVEC SUCCES !
+echo  =======================================================
+echo.
+echo  Pour demarrer l'application :
+echo    - Double-cliquez sur start.bat
+echo    - Ou lancez-le depuis un terminal
+echo.
+echo  L'application sera accessible sur http://localhost:5173
 echo.
 pause
+ENDLOCAL
 exit /b 0
 
+:: ─────────────────────────────────────────────────────────
+:: Gestion des erreurs
+:: ─────────────────────────────────────────────────────────
 :error
 echo.
-echo =======================================================
-echo   [ERREUR] L'installation a échoué.
-echo   Veuillez vérifier les messages ci-dessus.
-echo =======================================================
+echo  =======================================================
+echo     ERREUR : L'installation a echoue.
+echo     Verifiez les messages ci-dessus pour plus de details.
+echo  =======================================================
 echo.
-pause
+echo  Appuyez sur une touche pour fermer cette fenetre...
+pause >nul
+ENDLOCAL
 exit /b 1

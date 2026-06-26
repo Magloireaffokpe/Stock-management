@@ -81,9 +81,11 @@ export default function SalesPage() {
         </div>
         <div className="page-header-actions">
           <button className="btn btn-outline btn-sm" onClick={load}><RefreshCw size={14} /></button>
-          <button className="btn btn-outline btn-sm" onClick={handleExport} disabled={exporting}>
-            {exporting ? <div className="spinner" /> : <Download size={14} />} Export Excel
-          </button>
+          {isAdmin && (
+            <button className="btn btn-outline btn-sm" onClick={handleExport} disabled={exporting}>
+              {exporting ? <div className="spinner" /> : <Download size={14} />} Export Excel
+            </button>
+          )}
           <Link to="/pos" className="btn btn-primary"><Receipt size={15} /> Nouvelle vente</Link>
         </div>
       </div>

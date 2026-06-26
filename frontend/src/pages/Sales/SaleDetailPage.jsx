@@ -76,7 +76,7 @@ export default function SaleDetailPage() {
                   <th style={{textAlign:'center'}}>Qté</th>
                   <th style={{textAlign:'right'}}>Prix unit.</th>
                   <th style={{textAlign:'right'}}>Sous-total</th>
-                  <th style={{textAlign:'right'}}>Marge</th>
+                  {isAdmin && <th style={{textAlign:'right'}}>Marge</th>}
                 </tr></thead>
                 <tbody>
                   {sale.items?.map(item => {
@@ -102,11 +102,13 @@ export default function SaleDetailPage() {
                             {formatCurrency(item.subtotal, currency)}
                           </span>
                         </td>
-                        <td className="text-right">
-                          <span style={{ fontFamily:'var(--font-mono)', fontSize:'0.82rem', color:'var(--success)', fontWeight:600 }}>
-                            +{formatCurrency(margin, currency)}
-                          </span>
-                        </td>
+                        {isAdmin && (
+                          <td className="text-right">
+                            <span style={{ fontFamily:'var(--font-mono)', fontSize:'0.82rem', color:'var(--success)', fontWeight:600 }}>
+                              +{formatCurrency(margin, currency)}
+                            </span>
+                          </td>
+                        )}
                       </tr>
                     )
                   })}
@@ -163,7 +165,7 @@ export default function SaleDetailPage() {
                   <span style={{ fontFamily:'var(--font-mono)', fontWeight:700, color:'var(--success)' }}>{formatCurrency(sale.change_given, currency)}</span>
                 </div>
               )}
-              {sale.total_margin !== undefined && (
+              {sale.total_margin !== undefined && isAdmin && (
                 <>
                   <div className="divider" style={{ margin:'10px 0' }} />
                   <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.85rem' }}>

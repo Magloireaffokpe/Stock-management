@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Plus, Search, Edit2, X, Truck, Phone, RefreshCw } from 'lucide-react'
 import { catalogAPI } from '../../api'
+import useAuthStore from '../../store/authStore'
 import toast from 'react-hot-toast'
 
 export default function SuppliersPage() {
+  const isAdmin = useAuthStore(s => s.isAdmin())
   const [suppliers, setSuppliers] = useState([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
@@ -30,9 +32,11 @@ export default function SuppliersPage() {
         </div>
         <div className="page-header-actions">
           <button className="btn btn-outline btn-sm" onClick={load}><RefreshCw size={14} /></button>
-          <button className="btn btn-primary" onClick={() => { setEditSupplier(null); setShowModal(true) }}>
-            <Plus size={16} /> Nouveau fournisseur
-          </button>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={() => { setEditSupplier(null); setShowModal(true) }}>
+              <Plus size={16} /> Nouveau fournisseur
+            </button>
+          )}
         </div>
       </div>
 
@@ -52,7 +56,7 @@ export default function SuppliersPage() {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:14 }}>
           {suppliers.map(s => (
             <div key={s.id} className="card" style={{ padding:'18px 20px', opacity: s.is_active ? 1 : 0.6 }}>
-              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:10 }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:10 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
                   <div style={{
                     width:42, height:42, borderRadius:'50%',
@@ -74,9 +78,11 @@ export default function SuppliersPage() {
                     )}
                   </div>
                 </div>
-                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setEditSupplier(s); setShowModal(true) }}>
-                  <Edit2 size={13} />
-                </button>
+                {isAdmin && (
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setEditSupplier(s); setShowModal(true) }}>
+                    <Edit2 size={13} />
+                  </button>
+                )}
               </div>
               <div style={{ display:'flex', gap:12, paddingTop:10, borderTop:'1px solid var(--border)' }}>
                 <div style={{ flex:1, textAlign:'center' }}>

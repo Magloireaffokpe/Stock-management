@@ -32,7 +32,7 @@ class IsAdminOrReadOnly(IsAuthenticated):
 
 class CategoryListCreateView(generics.ListCreateAPIView):
     serializer_class = CategorySerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     search_fields = ['name']
     ordering_fields = ['order', 'name']
 
@@ -48,7 +48,7 @@ class CategoryListCreateView(generics.ListCreateAPIView):
 
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CategorySerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     queryset = Category.objects.prefetch_related('subcategories').all()
 
 
@@ -56,7 +56,7 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class SubCategoryListCreateView(generics.ListCreateAPIView):
     serializer_class = SubCategorySerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = SubCategory.objects.all()
@@ -68,7 +68,7 @@ class SubCategoryListCreateView(generics.ListCreateAPIView):
 
 class SubCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = SubCategorySerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     queryset = SubCategory.objects.all()
 
 

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { catalogAPI, salesAPI, reportsAPI, formatCurrency } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
+import useAuthStore from '../../store/authStore'
 import toast from 'react-hot-toast'
 
 const PAYMENT_METHODS = [
@@ -18,6 +19,7 @@ const PAYMENT_METHODS = [
 
 export default function POSPage() {
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
+  const isAdmin  = useAuthStore(s => s.isAdmin())
   const [query, setQuery]           = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [products, setProducts]     = useState([])
@@ -259,20 +261,29 @@ export default function POSPage() {
               <div key={item.product.id} className="cart-item">
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="cart-item-name">{item.product.name}</div>
-                  {/* Prix éditable */}
+                  {/* Prix — modifiable admin seulement */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                    <input
-                      type="number"
-                      value={item.unit_price}
-                      onChange={e => updatePrice(item.product.id, e.target.value)}
-                      style={{
-                        width: 90, padding: '2px 6px',
-                        border: '1px solid var(--border)', borderRadius: 5,
+                    {isAdmin ? (
+                      <input
+                        type="number"
+                        value={item.unit_price}
+                        onChange={e => updatePrice(item.product.id, e.target.value)}
+                        style={{
+                          width: 90, padding: '2px 6px',
+                          border: '1px solid var(--border)', borderRadius: 5,
+                          fontSize: '0.75rem', fontFamily: 'var(--font-mono)',
+                          background: 'var(--bg-input)',
+                        }}
+                        min={0}
+                      />
+                    ) : (
+                      <span style={{
                         fontSize: '0.75rem', fontFamily: 'var(--font-mono)',
-                        background: 'var(--bg-input)',
-                      }}
-                      min={0}
-                    />
+                        color: 'var(--text-secondary)', fontWeight: 600,
+                      }}>
+                        {formatCurrency(item.unit_price, currency)}
+                      </span>
+                    )}
                     <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{currency}</span>
                   </div>
                 </div>
@@ -325,28 +336,30 @@ export default function POSPage() {
               </span>
             </div>
 
-            {/* Remise */}
-            <div className="pos-total-row">
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Percent size={13} /> Remise
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <input
-                  type="number"
-                  value={discount}
-                  onChange={e => setDiscount(e.target.value)}
-                  placeholder="0"
-                  min={0}
-                  style={{
-                    width: 80, padding: '3px 8px',
-                    border: '1px solid var(--border)', borderRadius: 5,
-                    fontSize: '0.78rem', fontFamily: 'var(--font-mono)',
-                    textAlign: 'right', background: 'var(--bg-input)',
-                  }}
-                />
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{currency}</span>
+            {/* Remise — admins seulement */}
+            {isAdmin && (
+              <div className="pos-total-row">
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Percent size={13} /> Remise
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="number"
+                    value={discount}
+                    onChange={e => setDiscount(e.target.value)}
+                    placeholder="0"
+                    min={0}
+                    style={{
+                      width: 80, padding: '3px 8px',
+                      border: '1px solid var(--border)', borderRadius: 5,
+                      fontSize: '0.78rem', fontFamily: 'var(--font-mono)',
+                      textAlign: 'right', background: 'var(--bg-input)',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{currency}</span>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="divider" style={{ margin: '8px 0' }} />
 
