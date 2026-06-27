@@ -889,12 +889,47 @@ tbody td {
 }
 
 /* ── POS ─────────────────────────────────────────── */
+.page-body-pos {
+  padding: 12px 16px !important;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+}
+
 .pos-layout {
   display: grid;
   grid-template-columns: 1fr 380px;
   gap: 20px;
-  height: calc(100vh - 60px - 56px);
+  height: 100%;
+  min-height: 0;
 }
+
+@media (min-width: 1440px) {
+  .pos-layout {
+    grid-template-columns: 1fr 420px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .pos-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow-y: visible;
+  }
+  .page-body-pos {
+    overflow-y: auto !important;
+  }
+  .pos-products, .pos-cart {
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+  .pos-cart-items {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+}
+
 
 .pos-products {
   overflow-y: auto;

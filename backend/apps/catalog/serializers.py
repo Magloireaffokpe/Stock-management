@@ -36,6 +36,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     stock_status     = serializers.CharField(read_only=True)
     margin           = serializers.DecimalField(max_digits=12, decimal_places=0, read_only=True)
     margin_percent   = serializers.FloatField(read_only=True)
+    is_active        = serializers.BooleanField(default=True, required=False)
     image_url        = serializers.SerializerMethodField()
 
     class Meta:

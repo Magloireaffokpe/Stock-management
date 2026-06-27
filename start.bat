@@ -1,60 +1,38 @@
 @echo off
-SETLOCAL EnableDelayedExpansion
 chcp 65001 > nul 2>&1
-title MICROLOGIS Stock Manager
+title Lancement - MICROLOGIS Stock Manager
 
 echo.
 echo  =======================================================
-echo      DEMARRAGE DE MICROLOGIS STOCK MANAGER
+echo     LANCEMENT DE MICROLOGIS STOCK MANAGER (DOCKER)
 echo  =======================================================
 echo.
 
-:: Vérification rapide que l'installation a été faite
-if not exist "backend\venv\Scripts\activate.bat" (
-    echo  [ERREUR] L'installation n'a pas ete effectuee.
-    echo  Veuillez d'abord lancer install.bat
+:: Vérification de Docker
+docker --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo  [ERREUR] Docker n'est pas installe ou n'est pas lance.
+    echo  Veuillez installer Docker Desktop : https://www.docker.com/products/docker-desktop/
+    echo  Et assurez-vous qu'il est en cours d'execution.
     echo.
     pause
     exit /b 1
 )
 
-if not exist "frontend\node_modules" (
-    echo  [ERREUR] Les dependances frontend ne sont pas installees.
-    echo  Veuillez d'abord lancer install.bat
-    echo.
-    pause
-    exit /b 1
+:: Prévention du bug de volume Docker avec SQLite (qui créerait un dossier au lieu d'un fichier)
+if not exist "backend\db.sqlite3" (
+    echo Creation du fichier de base de donnees initial...
+    type nul > "backend\db.sqlite3"
 )
 
-:: Démarrer Django en arrière-plan (avec le venv activé)
-echo  [1/3] Demarrage du serveur backend (Django)...
-start "MICROLOGIS Backend" /d "%~dp0backend" cmd /k "call venv\Scripts\activate.bat && python manage.py runserver 0.0.0.0:8000"
-
-:: Attendre que Django soit prêt
-echo        Attente du demarrage du backend...
-timeout /t 5 /nobreak > nul
-
-:: Démarrer React Vite
-echo  [2/3] Demarrage du frontend (Vite)...
-start "MICROLOGIS Frontend" /d "%~dp0frontend" cmd /k "npm run dev"
-
-:: Attendre que Vite soit prêt
-echo        Attente du demarrage du frontend...
-timeout /t 5 /nobreak > nul
-
-:: Ouvrir le navigateur
-echo  [3/3] Ouverture du navigateur...
-start "" "http://localhost:5173"
+echo Demarrage des conteneurs (Backend, Frontend, Cache Redis)...
+docker compose up --build -d
 
 echo.
 echo  =======================================================
-echo     APPLICATION DEMARREE AVEC SUCCES
+echo     APPLICATION PRETE !
 echo  =======================================================
 echo.
-echo  Frontend : http://localhost:5173
-echo  Backend  : http://localhost:8000
+echo  L'application est desormais accessible sur : http://localhost
 echo.
-echo  Pour arreter : fermez les deux fenetres noires.
-echo.
-ENDLOCAL
 pause

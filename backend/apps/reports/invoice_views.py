@@ -60,7 +60,7 @@ class InvoicePDFView(APIView):
         # Chercher le PDF déjà généré
         pdf_path = Path(settings.FACTURES_DIR) / f'{sale.invoice_number}.pdf'
 
-        if not pdf_path.exists():
+        if not sale.pdf_file or not pdf_path.exists():
             pdf_path, error = generate_pdf(sale)
             if error:
                 return Response({'error': error}, status=500)

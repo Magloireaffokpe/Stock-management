@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: micrologis-backend
+    restart: always
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      # Mount persistent data files
+      - ./backend/db.sqlite3:/app/db.sqlite3
+      - ./backend/media:/app/media
+      - ./backend/factures:/app/factures
+      - ./backend/backup:/app/backup
+    depends_on:
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: micrologis-frontend
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      # Mount media and factures as read-only so Nginx can serve them rapidly
+      - ./backend/media:/app/media:ro
+      - ./backend/factures:/app/factures:ro
+    depends_on:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    container_name: micrologis-redis
+    restart: always

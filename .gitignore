@@ -18,6 +18,8 @@ env/
 media/
 staticfiles/
 static/
+factures/
+backup/
 local_settings.py
 db.sqlite3
 

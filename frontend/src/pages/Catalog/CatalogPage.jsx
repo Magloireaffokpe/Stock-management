@@ -204,12 +204,19 @@ export default function CatalogPage() {
                 {products.map(p => {
                   const ss = STOCK_STATUS[p.stock_status] || STOCK_STATUS.ok
                   return (
-                    <tr key={p.id}>
+                    <tr key={p.id} style={{ opacity: p.is_active ? 1 : 0.5 }}>
                       <td><span className="td-mono" style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{p.sku}</span></td>
                       <td>
-                        <Link to={`/catalog/${p.id}`} style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--blue-600)', textDecoration: 'none' }}>
-                          {p.name}
-                        </Link>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Link to={`/catalog/${p.id}`} style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--blue-600)', textDecoration: 'none' }}>
+                            {p.name}
+                          </Link>
+                          {!p.is_active && (
+                            <span className="badge badge-grey" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
+                              Inactif
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{p.condition}</div>
                       </td>
                       <td>
@@ -339,6 +346,7 @@ function ProductModal({ product, categories, suppliers, currency, onClose, onSav
     stock_quantity: product?.stock_quantity || 0,
     low_stock_threshold: product?.low_stock_threshold || '',
     description: product?.description || '',
+    is_active: product ? (product.is_active !== false) : true,
   })
   const [imageFile, setImageFile] = useState(null)
   const [saving, setSaving]       = useState(false)
@@ -455,6 +463,17 @@ function ProductModal({ product, categories, suppliers, currency, onClose, onSav
             <div className="input-group" style={{ gridColumn: '1 / -1' }}>
               <label className="input-label">Description</label>
               <textarea className="input" rows={2} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Description optionnelle…" style={{ resize: 'vertical' }} />
+            </div>
+            <div className="input-group" style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={form.is_active}
+                  onChange={e => set('is_active', e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: 'var(--blue-600)' }}
+                />
+                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Actif (le produit est visible dans le catalogue et disponible pour les ventes)</span>
+              </label>
             </div>
             <div className="input-group" style={{ gridColumn: '1 / -1' }}>
               <label className="input-label">Image produit</label>

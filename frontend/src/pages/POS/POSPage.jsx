@@ -163,7 +163,7 @@ export default function POSPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px - 56px)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
 
       {/* Filtres */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', flexShrink: 0 }}>

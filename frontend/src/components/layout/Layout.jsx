@@ -73,6 +73,7 @@ export default function Layout() {
   const { unreadCount, markAllRead } = useAlertStore()
   const settings = useSettingsStore(s => s.settings)
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [showAlerts, setShowAlerts] = useState(false)
   const alerts = useAlertStore(s => s.alerts)
 
@@ -206,7 +207,7 @@ export default function Layout() {
         </header>
 
         {/* Page content */}
-        <main className="page-body">
+        <main className={`page-body ${pathname === '/pos' ? 'page-body-pos' : ''}`}>
           <Outlet />
         </main>
       </div>

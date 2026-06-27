@@ -32,7 +32,7 @@ class IsAdminOrReadOnly(IsAuthenticated):
 
 class CategoryListCreateView(generics.ListCreateAPIView):
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminOrReadOnly]
     search_fields = ['name']
     ordering_fields = ['order', 'name']
 
@@ -48,7 +48,7 @@ class CategoryListCreateView(generics.ListCreateAPIView):
 
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminOrReadOnly]
     queryset = Category.objects.prefetch_related('subcategories').all()
 
 
