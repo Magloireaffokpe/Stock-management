@@ -8,7 +8,7 @@ echo     LANCEMENT DE MICROLOGIS STOCK MANAGER (DOCKER)
 echo  =======================================================
 echo.
 
-:: Vérification de Docker
+:: Verification de Docker
 docker --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo  [ERREUR] Docker n'est pas installe ou n'est pas lance.
@@ -19,7 +19,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: Prévention du bug de volume Docker avec SQLite (qui créerait un dossier au lieu d'un fichier)
+:: Prevention du bug de volume Docker avec SQLite
 if not exist "backend\db.sqlite3" (
     echo Creation du fichier de base de donnees initial...
     type nul > "backend\db.sqlite3"

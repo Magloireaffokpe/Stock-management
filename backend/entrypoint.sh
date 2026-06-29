@@ -4,12 +4,6 @@
 echo "Applying database migrations..."
 python manage.py migrate --noinput
 
-# Load initial data if it exists
-if [ -f "initial_data.json" ]; then
-    echo "Loading initial data..."
-    python manage.py loaddata initial_data.json
-fi
-
 # Create superuser if not exists
 echo "Ensuring admin user exists..."
 python manage.py shell -c "

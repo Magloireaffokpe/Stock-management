@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 > nul 2>&1
-title Arrêt de MICROLOGIS Stock Manager
+title Arret de MICROLOGIS Stock Manager
 
 echo.
 echo  =======================================================
