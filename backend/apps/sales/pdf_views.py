@@ -11,6 +11,7 @@ from django.template.loader import render_to_string
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from .access import visible_sales_queryset
 
 
 class InvoicePDFView(APIView):
@@ -22,8 +23,11 @@ class InvoicePDFView(APIView):
         from apps.settings_app.models import StoreSettings
 
         try:
-            sale = Sale.objects.prefetch_related('items__product').select_related(
-                'client', 'created_by'
+            sale = visible_sales_queryset(
+                request.user,
+                Sale.objects.prefetch_related('items__product').select_related(
+                    'client', 'created_by'
+                ),
             ).get(pk=pk)
         except Sale.DoesNotExist:
             return Response({'error': 'Vente introuvable'}, status=404)

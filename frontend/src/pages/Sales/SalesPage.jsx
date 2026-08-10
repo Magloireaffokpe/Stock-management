@@ -76,8 +76,10 @@ export default function SalesPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Historique des ventes</h1>
-          <p className="page-subtitle">{totalCount} vente(s)</p>
+          <h1 className="page-title">{isAdmin ? 'Historique des ventes' : 'Mes ventes — 7 derniers jours'}</h1>
+          <p className="page-subtitle">
+            {totalCount} vente(s){!isAdmin && ' réalisées au cours des 7 derniers jours'}
+          </p>
         </div>
         <div className="page-header-actions">
           <button className="btn btn-outline btn-sm" onClick={load}><RefreshCw size={14} /></button>

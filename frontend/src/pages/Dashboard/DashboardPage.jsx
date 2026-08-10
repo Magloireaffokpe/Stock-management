@@ -9,12 +9,13 @@ import {
 } from 'recharts'
 import { Link } from 'react-router-dom'
 import { reportsAPI, stockAPI, formatCurrency, formatDatetime } from '../../api'
+import useAuthStore from '../../store/authStore'
 import useSettingsStore from '../../store/settingsStore'
 import toast from 'react-hot-toast'
 
 const COLORS_PIE = ['#1A52A0','#F06820','#16A34A','#7C3AED','#0891B2','#D97706','#DC2626']
 
-function KPICard({ label, value, sub, variation, icon: Icon, color, bg }) {
+function KPICard({ label, value, sub, variation, icon: Icon, color, bg, hideVariation = false }) {
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
   const isUp   = variation > 0
   const isDown = variation < 0
@@ -32,13 +33,15 @@ function KPICard({ label, value, sub, variation, icon: Icon, color, bg }) {
           ? formatCurrency(value, currency)
           : value ?? '—'}
       </div>
-      <div className="kpi-sub">
-        <span className={`kpi-variation ${varClass}`}>
-          <VarIcon size={12} />
-          {Math.abs(variation ?? 0).toFixed(1)}%
-        </span>
-        <span className="kpi-vs">vs période préc.</span>
-      </div>
+      {!hideVariation && (
+        <div className="kpi-sub">
+          <span className={`kpi-variation ${varClass}`}>
+            <VarIcon size={12} />
+            {Math.abs(variation ?? 0).toFixed(1)}%
+          </span>
+          <span className="kpi-vs">vs période préc.</span>
+        </div>
+      )}
       {sub && <div style={{ marginTop: 6, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{sub}</div>}
     </div>
   )
@@ -65,6 +68,7 @@ const CustomTooltip = ({ active, payload, label, currency }) => {
 
 export default function DashboardPage() {
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
+  const isAdmin = useAuthStore(s => s.isAdmin())
   const [kpi, setKpi]       = useState(null)
   const [daily, setDaily]   = useState([])
   const [recent, setRecent] = useState([])
@@ -153,16 +157,19 @@ export default function DashboardPage() {
           icon={DollarSign}
           color="var(--blue-500)"
           bg="var(--blue-100)"
+          hideVariation={!isAdmin}
         />
-        <KPICard
-          label="CA ce mois"
-          value={m.revenue || 0}
-          variation={m.variation_revenue}
-          sub={`Bénéfice : ${formatCurrency(m.profit || 0, currency)}`}
-          icon={TrendingUp}
-          color="var(--success)"
-          bg="var(--success-light)"
-        />
+        {isAdmin && (
+          <KPICard
+            label="CA ce mois"
+            value={m.revenue || 0}
+            variation={m.variation_revenue}
+            sub={`Bénéfice : ${formatCurrency(m.profit || 0, currency)}`}
+            icon={TrendingUp}
+            color="var(--success)"
+            bg="var(--success-light)"
+          />
+        )}
         <KPICard
           label="Produits actifs"
           value={s.total_products || 0}
@@ -172,15 +179,17 @@ export default function DashboardPage() {
           color="var(--orange-500)"
           bg="var(--orange-100)"
         />
-        <KPICard
-          label="Valeur du stock"
-          value={stockVal?.selling_value || 0}
-          variation={0}
-          sub={`Achat : ${formatCurrency(stockVal?.purchase_value || 0, currency)}`}
-          icon={ShoppingBag}
-          color="var(--info)"
-          bg="var(--info-light)"
-        />
+        {isAdmin && (
+          <KPICard
+            label="Valeur du stock"
+            value={stockVal?.selling_value || 0}
+            variation={0}
+            sub={`Achat : ${formatCurrency(stockVal?.purchase_value || 0, currency)}`}
+            icon={ShoppingBag}
+            color="var(--info)"
+            bg="var(--info-light)"
+          />
+        )}
       </div>
 
       {/* Charts + Tables */}
@@ -289,7 +298,7 @@ export default function DashboardPage() {
         {/* Ventes récentes */}
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Dernières ventes</span>
+            <span className="card-title">{isAdmin ? 'Dernières ventes' : 'Mes ventes — 7 derniers jours'}</span>
             <Link to="/sales" className="btn btn-ghost btn-sm" style={{ fontSize: '0.78rem' }}>
               Historique <ArrowRight size={13} />
             </Link>

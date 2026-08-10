@@ -30,7 +30,8 @@ const useAlertStore = create((set, get) => ({
 
   connectWS: () => {
     if (get().wsConnected) return
-    const wsUrl = `ws://${window.location.hostname}:8000/ws/stock/`
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const wsUrl = `${protocol}://${window.location.host}/ws/stock/`
     const ws = new WebSocket(wsUrl)
 
     ws.onopen = () => set({ wsConnected: true })

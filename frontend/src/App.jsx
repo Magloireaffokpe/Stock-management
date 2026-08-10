@@ -92,13 +92,13 @@ export default function App() {
         <Route path="pos" element={<POSPage />} />
         <Route path="catalog" element={<CatalogPage />} />
         <Route path="catalog/:id" element={<ProductDetailPage />} />
-        <Route path="suppliers" element={<SuppliersPage />} />
+        <Route path="suppliers" element={<RequireAdmin><SuppliersPage /></RequireAdmin>} />
         <Route path="sales" element={<SalesPage />} />
         <Route path="sales/:id" element={<SaleDetailPage />} />
-        <Route path="restocks" element={<RestocksPage />} />
+        <Route path="restocks" element={<RequireAdmin><RestocksPage /></RequireAdmin>} />
         <Route path="stock" element={<StockPage />} />
         <Route path="clients" element={<ClientsPage />} />
-        <Route path="reports" element={<ReportsPage />} />
+        <Route path="reports" element={<RequireAdmin><ReportsPage /></RequireAdmin>} />
         <Route path="settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
         <Route path="audit" element={<RequireAdmin><AuditLogPage /></RequireAdmin>} />
         <Route path="profile" element={<ProfilePage />} />

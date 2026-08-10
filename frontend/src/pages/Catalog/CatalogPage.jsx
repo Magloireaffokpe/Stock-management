@@ -51,6 +51,8 @@ export default function CatalogPage() {
   const [showModal, setShowModal]   = useState(false)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [editProduct, setEditProduct] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deletingProduct, setDeletingProduct] = useState(false)
   const [pageSize, setPageSize]     = useState(25)
 
   const load = useCallback(async () => {
@@ -86,13 +88,20 @@ export default function CatalogPage() {
     })
   }, [fetchCategories])
 
-  const handleDelete = async (product) => {
-    if (!confirm(`Désactiver « ${product.name} » ?`)) return
+  const handleDelete = (product) => {
+    setDeleteTarget(product)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeletingProduct(true)
     try {
-      await catalogAPI.deleteProduct(product.id)
-      toast.success('Produit désactivé')
+      await catalogAPI.deleteProduct(deleteTarget.id)
+      toast.success('Produit supprimé')
+      setDeleteTarget(null)
       load()
-    } catch { toast.error('Erreur') }
+    } catch { toast.error('Erreur lors de la suppression') }
+    finally { setDeletingProduct(false) }
   }
 
   const totalPages = Math.ceil(totalCount / pageSize)
@@ -108,9 +117,11 @@ export default function CatalogPage() {
           <button className="btn btn-outline btn-sm" onClick={load}>
             <RefreshCw size={14} />
           </button>
-          <button className="btn btn-outline" onClick={() => setShowCategoryModal(true)}>
-            Gérer les catégories
-          </button>
+          {isAdmin && (
+            <button className="btn btn-outline" onClick={() => setShowCategoryModal(true)}>
+              Gérer les catégories
+            </button>
+          )}
           {isAdmin && (
             <button className="btn btn-primary" onClick={() => { setEditProduct(null); setShowModal(true) }}>
               <Plus size={16} /> Ajouter un produit
@@ -193,9 +204,9 @@ export default function CatalogPage() {
                   <th>Produit</th>
                   <th>Catégorie</th>
                   <th>État</th>
-                  <th style={{ textAlign: 'right' }}>Prix achat</th>
+                  {isAdmin && <th style={{ textAlign: 'right' }}>Prix achat</th>}
                   <th style={{ textAlign: 'right' }}>Prix vente</th>
-                  <th style={{ textAlign: 'right' }}>Marge</th>
+                  {isAdmin && <th style={{ textAlign: 'right' }}>Marge</th>}
                   <th style={{ textAlign: 'center' }}>Stock</th>
                   <th></th>
                 </tr>
@@ -229,21 +240,25 @@ export default function CatalogPage() {
                           {CONDITIONS.find(c => c.value === p.condition)?.label}
                         </span>
                       </td>
-                      <td className="text-right">
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                          {formatCurrency(p.purchase_price, currency)}
-                        </span>
-                      </td>
+                      {isAdmin && (
+                        <td className="text-right">
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                            {formatCurrency(p.purchase_price, currency)}
+                          </span>
+                        </td>
+                      )}
                       <td className="text-right">
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.875rem', fontWeight: 700 }}>
                           {formatCurrency(p.selling_price, currency)}
                         </span>
                       </td>
-                      <td className="text-right">
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 600, color: 'var(--success)' }}>
-                          +{p.margin_percent}%
-                        </div>
-                      </td>
+                      {isAdmin && (
+                        <td className="text-right">
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 600, color: 'var(--success)' }}>
+                            +{p.margin_percent}%
+                          </div>
+                        </td>
+                      )}
                       <td style={{ textAlign: 'center' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                           <span className={`badge ${ss.cls}`}>{ss.label}</span>
@@ -273,7 +288,7 @@ export default function CatalogPage() {
                               <button
                                 className="btn btn-ghost btn-icon btn-sm"
                                 onClick={() => handleDelete(p)}
-                                data-tooltip="Désactiver"
+                                data-tooltip="Supprimer"
                               >
                                 <Trash2 size={14} style={{ color: 'var(--danger)' }} />
                               </button>
@@ -318,6 +333,37 @@ export default function CatalogPage() {
           onSaved={() => { setShowModal(false); load() }}
           onRefreshCategories={fetchCategories}
         />
+      )}
+
+      {/* Modal de confirmation suppression */}
+      {deleteTarget && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setDeleteTarget(null)}>
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <span className="modal-title">Supprimer le produit</span>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteTarget(null)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: 8 }}>
+                Voulez-vous vraiment supprimer définitivement <strong>{deleteTarget.name}</strong> ?
+              </p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                Cette action est irréversible et supprimera aussi les données liées au produit.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setDeleteTarget(null)}>Annuler</button>
+              <button
+                className="btn"
+                onClick={confirmDelete}
+                disabled={deletingProduct}
+                style={{ background: 'var(--danger)', color: '#fff', borderColor: 'var(--danger)' }}
+              >
+                {deletingProduct ? <><div className="spinner" /> Suppression…</> : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal gestion des catégories */}

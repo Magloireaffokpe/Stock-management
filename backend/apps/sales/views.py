@@ -15,6 +15,7 @@ from .serializers import (
     QuotationSerializer,
     RestockSerializer, RestockCreateSerializer,
 )
+from .access import visible_sales_queryset
 
 
 # ── CLIENTS ───────────────────────────────────────────────────────
@@ -43,7 +44,10 @@ class SaleListView(generics.ListAPIView):
     ordering_fields = ['created_at', 'total_amount', 'sale_date']
 
     def get_queryset(self):
-        qs = Sale.objects.prefetch_related('items__product').select_related('client', 'created_by').all()
+        qs = visible_sales_queryset(
+            self.request.user,
+            Sale.objects.prefetch_related('items__product').select_related('client', 'created_by'),
+        )
 
         date_from = self.request.query_params.get('date_from')
         date_to   = self.request.query_params.get('date_to')
@@ -58,9 +62,13 @@ class SaleListView(generics.ListAPIView):
 class SaleDetailView(generics.RetrieveAPIView):
     serializer_class = SaleSerializer
     permission_classes = [IsAuthenticated]
-    queryset = Sale.objects.prefetch_related('items__product').select_related(
-        'client', 'created_by', 'cancelled_by'
-    ).all()
+    def get_queryset(self):
+        return visible_sales_queryset(
+            self.request.user,
+            Sale.objects.prefetch_related('items__product').select_related(
+                'client', 'created_by', 'cancelled_by'
+            ),
+        )
 
 
 class SaleCreateView(APIView):

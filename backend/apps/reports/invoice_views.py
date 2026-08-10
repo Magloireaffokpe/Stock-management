@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.sales.models import Sale
+from apps.sales.access import visible_sales_queryset
 from apps.settings_app.models import StoreSettings
 
 
@@ -51,8 +52,11 @@ class InvoicePDFView(APIView):
 
     def get(self, request, pk):
         try:
-            sale = Sale.objects.prefetch_related('items__product').select_related(
-                'client', 'created_by'
+            sale = visible_sales_queryset(
+                request.user,
+                Sale.objects.prefetch_related('items__product').select_related(
+                    'client', 'created_by'
+                ),
             ).get(pk=pk)
         except Sale.DoesNotExist:
             return Response({'error': 'Vente introuvable'}, status=404)
@@ -86,8 +90,11 @@ class InvoicePDFRegenerateView(APIView):
 
     def post(self, request, pk):
         try:
-            sale = Sale.objects.prefetch_related('items__product').select_related(
-                'client', 'created_by'
+            sale = visible_sales_queryset(
+                request.user,
+                Sale.objects.prefetch_related('items__product').select_related(
+                    'client', 'created_by'
+                ),
             ).get(pk=pk)
         except Sale.DoesNotExist:
             return Response({'error': 'Vente introuvable'}, status=404)

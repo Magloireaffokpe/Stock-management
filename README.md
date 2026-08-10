@@ -7,14 +7,16 @@ Application de gestion de stock locale pour MICROLOGIS INFORMATIQUE & GSM, Parak
 Avant de démarrer, assurez-vous d’avoir installé :
 
 - Git
-- Docker Desktop ou Docker Engine avec Docker Compose
+- Docker Desktop avec Docker Compose **ou**, pour le mode local, Python 3.12 et Node.js LTS
 - Un navigateur web moderne
 
-> Si vous êtes sur Windows, vous pouvez aussi utiliser les scripts fournis : start.bat et stop.bat.
+> Sous Windows, les scripts sont séparés par mode dans [scripts/windows](scripts/windows/README.md).
 
 ---
 
-## 1. Cloner et démarrer le projet
+## 1. Choisir un mode de démarrage
+
+### Mode Docker
 
 Depuis votre terminal, placez-vous dans le dossier de travail puis exécutez :
 
@@ -24,7 +26,15 @@ cd "Stock management"
 docker compose up --build -d
 ```
 
-Si vous êtes sous Windows, vous pouvez simplement double-cliquer sur start.bat pour lancer l’application.
+Sous Windows, double-cliquez sur `scripts/windows/docker/start.bat` (les fichiers `start.bat` et `stop.bat` à la racine restent des raccourcis Docker).
+
+### Mode local, sans Docker (Windows)
+
+1. Double-cliquez sur `scripts/windows/local/install.bat` : installation des dépendances, migrations et compte administrateur.
+2. Double-cliquez sur `scripts/windows/local/start.bat` : les deux terminaux nécessaires et le navigateur s’ouvrent automatiquement.
+3. Pour arrêter l’application, double-cliquez sur `scripts/windows/local/stop.bat`.
+
+Le mode local démarre Daphne pour que l’API et le WebSocket fonctionnent correctement.
 
 ---
 
@@ -67,7 +77,7 @@ Il est fortement recommandé de changer ce mot de passe immédiatement depuis l�
 docker compose down
 ```
 
-Ou sur Windows : double-cliquez sur stop.bat.
+Ou sur Windows : double-cliquez sur `scripts/windows/docker/stop.bat`.
 
 ### Relancer
 
@@ -124,4 +134,3 @@ docker compose up --build -d
 - Base de données : SQLite
 - Temps réel : Django Channels + WebSockets
 - Conteneurisation : Docker Compose
-

@@ -24,9 +24,9 @@ const NAV = [
     section: 'Gestion',
     items: [
       { to: '/catalog',  icon: Package,     label: 'Catalogue' },
-      { to: '/suppliers',icon: Truck,       label: 'Fournisseurs' },
+      { to: '/suppliers',icon: Truck,       label: 'Fournisseurs', adminOnly: true },
       { to: '/sales',    icon: Receipt,     label: 'Ventes' },
-      { to: '/restocks', icon: RefreshCw,   label: 'Réappros' },
+      { to: '/restocks', icon: RefreshCw,   label: 'Réappros', adminOnly: true },
       { to: '/stock',    icon: Boxes,       label: 'Mouvements' },
       { to: '/clients',  icon: Users,       label: 'Clients' },
     ],
@@ -34,7 +34,7 @@ const NAV = [
   {
     section: 'Analyses',
     items: [
-      { to: '/reports', icon: BarChart3, label: 'Rapports' },
+      { to: '/reports', icon: BarChart3, label: 'Rapports', adminOnly: true },
     ],
   },
   {
@@ -119,13 +119,13 @@ export default function Layout() {
         <nav className="sidebar-nav">
           {NAV.map(group => {
             const visibleItems = group.items.filter(item =>
-              !item.adminOnly || isAdmin
+              (!item.adminOnly && !item.adminOnly) || isAdmin
             )
             if (!visibleItems.length) return null
             return (
               <div key={group.section}>
                 <p className="nav-section-label">{group.section}</p>
-                {visibleItems.map(({ to, icon: Icon, label, exact }) => (
+                {visibleItems.map(({ to, icon: Icon, label, exact, adminOnly }) => (
                   <NavLink
                     key={to}
                     to={to}

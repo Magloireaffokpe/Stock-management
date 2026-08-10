@@ -4,8 +4,10 @@ Couvre : Modèles (numérotation, calculs), Signals (décrément/restauration/r�
          API ventes, API dévis, API réappro, Clients
 """
 from decimal import Decimal
+from datetime import timedelta
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import status
 
 from apps.catalog.models import Product
@@ -343,6 +345,39 @@ class SaleListAPITest(BaseTestCase):
         ids = [s['id'] for s in r.data['results']]
         self.assertIn(s_cash.pk, ids)
 
+    def test_employe_ne_voit_que_ses_ventes_des_7_derniers_jours(self):
+        product = make_product(stock_quantity=20)
+        own_recent = make_sale(
+            self.employee, items=[{'product': product, 'quantity': 1, 'unit_price': 10000}]
+        )
+        other_recent = make_sale(
+            self.admin, items=[{'product': product, 'quantity': 1, 'unit_price': 10000}]
+        )
+        own_old = make_sale(
+            self.employee, items=[{'product': product, 'quantity': 1, 'unit_price': 10000}]
+        )
+        old_date = timezone.now() - timedelta(days=7)
+        Sale.objects.filter(pk=own_old.pk).update(sale_date=old_date)
+
+        response = self.employee_client.get('/api/sales/sales/')
+        ids = [sale['id'] for sale in response.data['results']]
+
+        self.assertIn(own_recent.pk, ids)
+        self.assertNotIn(other_recent.pk, ids)
+        self.assertNotIn(own_old.pk, ids)
+
+    def test_admin_conserve_acces_a_l_historique_complet(self):
+        product = make_product(stock_quantity=20)
+        old_sale = make_sale(
+            self.employee, items=[{'product': product, 'quantity': 1, 'unit_price': 10000}]
+        )
+        Sale.objects.filter(pk=old_sale.pk).update(
+            sale_date=timezone.now() - timedelta(days=7)
+        )
+
+        response = self.admin_client.get('/api/sales/sales/')
+        self.assertIn(old_sale.pk, [sale['id'] for sale in response.data['results']])
+
 
 class SaleDetailAPITest(BaseTestCase):
     """GET /api/sales/sales/<id>/"""
@@ -365,6 +400,18 @@ class SaleDetailAPITest(BaseTestCase):
         self.assertIn('total_margin', r.data)
         # Marge = (15000 - 10000) × 2 = 10000
         self.assertEqual(Decimal(str(r.data['total_margin'])), Decimal('10000'))
+
+    def test_employe_ne_peut_pas_ouvrir_une_vente_hors_de_sa_fenetre(self):
+        product = make_product(stock_quantity=10)
+        old_sale = make_sale(
+            self.employee, items=[{'product': product, 'quantity': 1, 'unit_price': 10000}]
+        )
+        Sale.objects.filter(pk=old_sale.pk).update(
+            sale_date=timezone.now() - timedelta(days=7)
+        )
+
+        response = self.employee_client.get(f'/api/sales/sales/{old_sale.pk}/')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 # ═══════════════════════════════════════════════════════════════════

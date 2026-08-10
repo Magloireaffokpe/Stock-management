@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  Search, ShoppingCart, Trash2, Plus, Minus, User, CreditCard,
-  Smartphone, Banknote, ReceiptText, X, Check, Percent, ChevronDown
+  Search, ShoppingCart, Trash2, Plus, Minus, User, ReceiptText,
+  X, Check, Percent, ChevronDown
 } from 'lucide-react'
 import { catalogAPI, salesAPI, reportsAPI, formatCurrency } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
@@ -9,12 +9,7 @@ import useAuthStore from '../../store/authStore'
 import toast from 'react-hot-toast'
 
 const PAYMENT_METHODS = [
-  { value: 'cash',     label: 'Espèces',       icon: Banknote },
-  { value: 'mtn',      label: 'MTN MoMo',      icon: Smartphone },
-  { value: 'moov',     label: 'Moov Money',    icon: Smartphone },
-  { value: 'celtiis',  label: 'Celtiis Money', icon: Smartphone },
-  { value: 'card',     label: 'Carte',         icon: CreditCard },
-  { value: 'transfer', label: 'Virement',      icon: CreditCard },
+  { value: 'cash', label: 'Espèces' },
 ]
 
 export default function POSPage() {
@@ -28,7 +23,6 @@ export default function POSPage() {
   const [clients, setClients]       = useState([])
   const [selectedClient, setSelectedClient] = useState(null)
   const [payment, setPayment]       = useState('cash')
-  const [amountPaid, setAmountPaid] = useState('')
   const [discount, setDiscount]     = useState('')
   const [loading, setLoading]       = useState(false)
   const [showSuccess, setShowSuccess] = useState(null)
@@ -122,12 +116,9 @@ export default function POSPage() {
   const subtotal  = cart.reduce((s, i) => s + i.unit_price * i.quantity, 0)
   const discountAmt = parseFloat(discount) || 0
   const total     = Math.max(0, subtotal - discountAmt)
-  const paid      = parseFloat(amountPaid) || 0
-  const change    = Math.max(0, paid - total)
 
   const handleSale = async () => {
     if (cart.length === 0) { toast.error('Panier vide'); return }
-    if (paid < total)      { toast.error('Montant insuffisant'); return }
     setLoading(true)
     try {
       const res = await salesAPI.createSale({
@@ -138,14 +129,13 @@ export default function POSPage() {
           unit_price: i.unit_price,
         })),
         payment_method: payment,
-        amount_paid:    paid,
+        amount_paid:    total,
         discount:       discountAmt,
       })
       const sale = res.data
       setShowSuccess(sale)
       setCart([])
       setSelectedClient(null)
-      setAmountPaid('')
       setDiscount('')
       // Rafraîchir les stocks dans la liste produits initiale
       const updated = await catalogAPI.products({ page_size: 20, is_active: true, min_stock: 1 })
@@ -369,61 +359,27 @@ export default function POSPage() {
             </div>
 
             {/* Paiement */}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap' }}>
-              {PAYMENT_METHODS.map(m => (
-                <button
-                  key={m.value}
-                  onClick={() => setPayment(m.value)}
-                  style={{
-                    padding: '5px 10px', fontSize: '0.72rem', fontWeight: 600,
-                    borderRadius: 'var(--radius-sm)',
-                    border: `1.5px solid ${payment === m.value ? 'var(--blue-500)' : 'var(--border)'}`,
-                    background: payment === m.value ? 'var(--blue-100)' : 'transparent',
-                    color: payment === m.value ? 'var(--blue-600)' : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Montant payé */}
             <div style={{ marginBottom: 10 }}>
-              <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-                Montant reçu
-              </label>
-              <input
-                type="number"
-                value={amountPaid}
-                onChange={e => setAmountPaid(e.target.value)}
-                placeholder={`${total}`}
-                className="input"
-                style={{ fontSize: '1rem', fontFamily: 'var(--font-mono)', fontWeight: 700, textAlign: 'right' }}
-                min={0}
-              />
-            </div>
-
-            {/* Monnaie */}
-            {paid > total && total > 0 && (
-              <div style={{
-                background: 'var(--success-light)', border: '1px solid var(--success)',
-                borderRadius: 'var(--radius-sm)', padding: '8px 12px',
-                display: 'flex', justifyContent: 'space-between',
-                marginBottom: 10, fontSize: '0.875rem',
-              }}>
-                <span style={{ color: 'var(--success)', fontWeight: 600 }}>Monnaie à rendre</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--success)' }}>
-                  {formatCurrency(change, currency)}
-                </span>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 6 }}>
+                Paiement
               </div>
-            )}
+              <div style={{
+                padding: '8px 10px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-soft)',
+                fontSize: '0.8rem', fontWeight: 600,
+                color: 'var(--text-secondary)',
+              }}>
+                {PAYMENT_METHODS[0].label}
+              </div>
+            </div>
 
             {/* Bouton valider */}
             <button
               className="btn btn-orange btn-xl w-full"
               onClick={handleSale}
-              disabled={loading || cart.length === 0 || (paid > 0 && paid < total)}
+              disabled={loading || cart.length === 0}
               style={{ justifyContent: 'center' }}
             >
               {loading ? (
