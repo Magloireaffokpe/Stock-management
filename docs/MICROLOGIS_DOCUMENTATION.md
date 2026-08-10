@@ -1,7 +1,7 @@
 # MICROLOGIS Stock Manager — Documentation Technique Complète
 
 > Application de gestion de stock **100 % locale** pour **MICROLOGIS INFORMATIQUE & GSM**, Parakou, Bénin.  
-> Stack : **Django 4.2 + React 18 + SQLite** · Aucun cloud, aucun abonnement, zéro dépendance externe.
+> Stack : **Django 4.2 + React 18 + SQLite + Docker Compose** · Aucun cloud, aucun abonnement, zéro dépendance externe.
 
 ---
 
@@ -66,148 +66,102 @@ Django ──► WebSocket  ws://localhost:8000/ws/stock/
 
 | Logiciel | Version minimale | Vérification | Téléchargement |
 |---|---|---|---|
-| **Python** | 3.10+ | `python --version` | https://www.python.org/downloads/ |
-| **Node.js** | 18+ | `node --version` | https://nodejs.org/ |
-| **npm** | 9+ | `npm --version` | Inclus avec Node.js |
-
-> ⚠️ Sous **Windows** : cocher « Add Python to PATH » lors de l'installation.
+| **Docker Desktop** (Windows/macOS) ou **Docker Engine** (Linux) | 24+ | `docker --version` | https://www.docker.com/ |
+| **Docker Compose** | v2 | `docker compose version` | Inclus avec Docker Desktop |
+| **Git** | récente | `git --version` | https://git-scm.com/ |
 
 ### Logiciels optionnels
 
 | Logiciel | Utilité |
 |---|---|
-| **WeasyPrint + GTK (Windows)** | Génération PDF factures. Sans lui, tout le reste fonctionne. |
-| **Git** | Mise à jour du code uniquement |
+| **WeasyPrint** | Génération PDF factures dans le conteneur backend. |
+| **Visual Studio Code** | Meilleure ergonomie pour le développement local. |
 
 ### Ressources minimales
 
-- RAM : 512 Mo libres
-- Disque : 500 Mo (dont ~350 Mo pour node_modules)
+- RAM : 4 Go libres recommandés
+- Disque : 2 Go disponibles
 - Processeur : tout ordinateur récent
-- Réseau : **aucun** (100 % offline après installation)
+- Réseau : nécessaire uniquement pour télécharger les images Docker au premier démarrage
 
 ---
 
 ## 3. Installation pas à pas
 
-### 3.1 Windows — Méthode simple (double-clic)
-
-```
-1. Décompresser micrologis_COMPLET.zip (ex : C:\micrologis\)
-2. Double-cliquer sur  install.bat
-3. Suivre les instructions à l'écran
-4. Identifiants créés :
-      Utilisateur : admin
-      Mot de passe : micrologis2026
-```
-
-### 3.2 Linux / macOS — Méthode manuelle
+### 3.1 Cloner le projet
 
 ```bash
-# 1. Se placer dans le dossier du projet
-cd /chemin/vers/micrologis-stock
-
-# 2. Environnement virtuel Python (recommandé)
-python3 -m venv venv
-source venv/bin/activate          # Linux/Mac
-# Sous Windows : venv\Scripts\activate
-
-# 3. Installer les dépendances Python
-pip install -r backend/requirements.txt
-
-# 4. Initialiser la base de données
-cd backend
-python manage.py migrate
-
-# 5. Charger les données initiales (8 catégories, 2 fournisseurs, 5 produits)
-python manage.py loaddata initial_data.json
-
-# 6. Créer le compte administrateur
-python manage.py shell -c "
-from django.contrib.auth import get_user_model
-User = get_user_model()
-if not User.objects.filter(username='admin').exists():
-    User.objects.create_superuser(
-        'admin', 'admin@micrologis.bj', 'micrologis2026', role='admin'
-    )
-    print('Admin créé : admin / micrologis2026')
-else:
-    print('Admin existe déjà.')
-"
-
-# 7. Installer les dépendances React
-cd ../frontend
-npm install
-
-# 8. Vérification
-cd ../backend
-python manage.py check
-# → System check identified no issues (0 silenced).
+git clone <url-du-depot>
+cd "Stock management"
 ```
 
-### 3.3 Vérification post-installation
+### 3.2 Démarrer avec Docker Compose
 
 ```bash
-cd backend
-python manage.py shell -c "
-from apps.catalog.models import Category, Product
-from apps.settings_app.models import StoreSettings
-print('Catégories :', Category.objects.count())   # 8
-print('Produits   :', Product.objects.count())    # 5
-print('Magasin    :', StoreSettings.get().store_name)
-"
+docker compose up --build -d
 ```
+
+Le premier démarrage télécharge les images nécessaires puis construit les conteneurs backend, frontend et Redis.
+
+### 3.3 Compte administrateur initial
+
+Au premier lancement, l’application crée automatiquement un compte administrateur si aucun utilisateur n’existe encore :
+
+- Nom d’utilisateur : `admin`
+- Mot de passe : `micrologis2026`
+
+Il est recommandé de le changer immédiatement après la première connexion.
+
+### 3.4 Vérification post-installation
+
+```bash
+docker compose ps
+```
+
+Vous devriez voir les services backend, frontend et redis en état `Up`.
 
 ---
 
 ## 4. Lancement et arrêt
 
-### 4.1 Windows — Scripts automatiques
+### 4.1 Démarrage
 
-| Script | Action |
-|---|---|
-| `start.bat` | Démarre backend + frontend + ouvre le navigateur automatiquement |
-| `stop.bat` | Arrête les deux serveurs |
-| `install.bat` | Installation complète (à lancer une seule fois) |
+Sur Windows, vous pouvez double-cliquer sur `start.bat`.
 
-### 4.2 Linux / macOS
+Depuis un terminal, la commande équivalente est :
 
 ```bash
-# Démarrage automatique (un seul script)
-bash start.sh
-
-# Démarrage manuel (deux terminaux séparés)
-
-# Terminal 1 — Backend Django
-cd backend
-source ../venv/bin/activate
-python manage.py runserver 0.0.0.0:8000
-
-# Terminal 2 — Frontend Vite
-cd frontend
-npm run dev
+docker compose up -d
 ```
 
-### 4.3 URLs d'accès
+### 4.2 Arrêt
+
+```bash
+docker compose down
+```
+
+Ou sur Windows : `stop.bat`.
+
+### 4.3 Relance après modification
+
+```bash
+docker compose up --build -d
+```
+
+### 4.4 URLs d'accès
 
 | URL | Description |
 |---|---|
-| `http://localhost:5173` | Interface React (usage quotidien) |
-| `http://localhost:8000/api/` | API Django REST (debug) |
-| `http://localhost:8000/admin/` | Interface admin Django |
-| `ws://localhost:8000/ws/stock/` | WebSocket alertes temps réel |
+| `http://localhost` | Interface principale (frontend via Nginx) |
+| `http://localhost/api/` | API Django REST |
+| `ws://localhost/ws/stock/` | WebSocket alertes temps réel |
 
-### 4.4 Accès depuis un autre poste du réseau local
+### 4.5 Accès depuis un autre poste du réseau local
 
-```bash
-# Sur la machine serveur
-python manage.py runserver 0.0.0.0:8000
+L’application est exposée via le port 80 de la machine hôte. Il suffit de pointer votre navigateur vers l’adresse IP de la machine serveur :
 
-# Modifier frontend/vite.config.js pour pointer vers l'IP du serveur
-proxy: {
-  '/api': { target: 'http://192.168.1.X:8000', changeOrigin: true }
-}
-# Sur le poste client → http://192.168.1.X:5173
+```text
+http://<ip-de-la-machine>
 ```
 
 ---
@@ -271,11 +225,11 @@ micrologis-stock/
 │   ├── vite.config.js           ← Proxy /api → :8000
 │   └── package.json
 │
-├── start.bat / start.sh
+├── docker-compose.yml          ← Orchestration des services Docker
+├── start.bat
 ├── stop.bat
-├── install.bat
 ├── README.md                    ← Guide utilisateur rapide
-└── DOCUMENTATION.md             ← Ce fichier
+└── docs/                        ← Documentation technique et utilisateur
 ```
 
 ---

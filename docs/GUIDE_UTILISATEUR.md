@@ -9,10 +9,15 @@ L'objectif de ce logiciel est de vous simplifier la vie : vous enregistrez vos p
 ## 🚀 1. Démarrage et Connexion
 
 ### Comment lancer l'application ?
-Si l'application est installée sur votre ordinateur Windows, il vous suffit de double-cliquer sur le fichier nommé **`start.bat`**. 
-Deux petites fenêtres noires vont s'ouvrir (ne les fermez pas, c'est le moteur du logiciel !), puis votre navigateur internet s'ouvrira tout seul sur la page de connexion.
+Après avoir cloné le projet, ouvrez un terminal à la racine du dossier puis exécutez :
 
-> 📌 **Ce que vous voyez :** Deux fenêtres noires s’ouvrent (l’une pour le serveur, l’autre pour l’interface). Votre navigateur (Chrome, Edge...) s’ouvre ensuite automatiquement sur une page blanche avec un logo **MICROLOGIS**, un champ *Nom d’utilisateur* et un champ *Mot de passe*.
+```bash
+docker compose up --build -d
+```
+
+Sur Windows, vous pouvez aussi double-cliquer sur **`start.bat`** pour lancer l’application automatiquement.
+
+> 📌 **Ce que vous voyez :** Une fois les services démarrés, votre navigateur peut ouvrir l’adresse **http://localhost**. Vous obtenez alors la page de connexion avec un logo **MICROLOGIS**, un champ *Nom d’utilisateur* et un champ *Mot de passe*.
 
 ### Se connecter
 Entrez votre **Nom d'utilisateur** et votre **Mot de passe**.
