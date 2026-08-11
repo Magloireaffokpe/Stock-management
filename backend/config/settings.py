@@ -159,6 +159,12 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
+# --- CSRF ---
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost',
+    'http://127.0.0.1',
+]
+
 # --- FACTURES PDF ---
 
 FACTURES_DIR = BASE_DIR / 'factures'
