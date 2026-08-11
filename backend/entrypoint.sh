@@ -4,6 +4,10 @@
 echo "Applying database migrations..."
 python manage.py migrate --noinput
 
+# Collect static files
+echo "Collecting static files..."
+python manage.py collectstatic --noinput
+
 # Create superuser if not exists
 echo "Ensuring admin user exists..."
 python manage.py shell -c "

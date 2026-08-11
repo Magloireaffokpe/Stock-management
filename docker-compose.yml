@@ -13,6 +13,7 @@ services:
       - ./backend/media:/app/media
       - ./backend/factures:/app/factures
       - ./backend/backup:/app/backup
+      - ./backend/staticfiles:/app/staticfiles
     depends_on:
       - redis
 
@@ -27,6 +28,7 @@ services:
       # Mount media and factures as read-only so Nginx can serve them rapidly
       - ./backend/media:/app/media:ro
       - ./backend/factures:/app/factures:ro
+      - ./backend/staticfiles:/app/staticfiles:ro
     depends_on:
       - backend
 

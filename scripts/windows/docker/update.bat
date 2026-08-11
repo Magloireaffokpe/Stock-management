@@ -1,14 +1,14 @@
 @echo off
 setlocal
 chcp 65001 > nul 2>&1
-title MICROLOGIS - Demarrage Docker
+title MICROLOGIS - Mise à jour Docker
 
 for %%I in ("%~dp0..\..\..") do set "PROJECT_ROOT=%%~fI"
 pushd "%PROJECT_ROOT%"
 
 echo.
 echo  =======================================================
-echo     MICROLOGIS STOCK MANAGER - MODE DOCKER
+echo     MICROLOGIS STOCK MANAGER - MISE A JOUR
 echo  =======================================================
 echo.
 
@@ -21,21 +21,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "backend\db.sqlite3" type nul > "backend\db.sqlite3"
-
-echo Demarrage des conteneurs...
-docker compose up -d
+echo Reconstruction des images Docker...
+docker compose build
 if errorlevel 1 (
-    echo [ERREUR] Le demarrage Docker a echoue.
+    echo [ERREUR] La reconstruction des images a echoue.
     popd
     pause
     exit /b 1
 )
 
 echo.
-echo Application disponible sur : http://localhost
-timeout /t 3 /nobreak >nul
-start "" "http://localhost"
+echo [SUCCES] Les images ont ete reconstruites avec succes.
+echo Vous pouvez maintenant utiliser start.bat pour lancer l'application.
 echo.
+
 popd
+pause
 exit /b 0

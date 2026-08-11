@@ -23,7 +23,7 @@ Depuis votre terminal, placez-vous dans le dossier de travail puis exécutez :
 ```bash
 git clone <url-du-depot>
 cd "Stock management"
-docker compose up --build -d
+docker compose up -d
 ```
 
 Sous Windows, double-cliquez sur `scripts/windows/docker/start.bat` (les fichiers `start.bat` et `stop.bat` à la racine restent des raccourcis Docker).
@@ -44,6 +44,7 @@ Une fois les conteneurs démarrés :
 
 - Interface utilisateur : http://localhost
 - API Django : http://localhost/api/
+- Administration Django : http://localhost/admin/
 - WebSocket stock : ws://localhost/ws/stock/
 
 Le frontend est servi via Nginx, et les appels API sont automatiquement redirigés vers le backend Django.
@@ -88,8 +89,11 @@ docker compose up -d
 ### Rebuilder après un changement de code
 
 ```bash
-docker compose up --build -d
+docker compose build
+docker compose up -d
 ```
+
+Ou sur Windows : double-cliquez sur `update.bat` à la racine (ou `scripts/windows/docker/update.bat`).
 
 ---
 
@@ -119,11 +123,13 @@ docker compose ps
 ```
 
 ### Les changements ne s’appliquent pas
-Relancez les conteneurs avec :
+Reconstruisez les conteneurs avec :
 
 ```bash
-docker compose up --build -d
+docker compose build
+docker compose up -d
 ```
+Ou sur Windows : utilisez le fichier `update.bat`.
 
 ---
 
