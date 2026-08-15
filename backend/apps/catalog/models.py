@@ -1,20 +1,26 @@
 from django.db import models
 from django.utils.text import slugify
+from django.core.exceptions import ValidationError
+from django.db.models import ProtectedError
 
+MAX_CATEGORY_DEPTH = 4
 
 class Category(models.Model):
-    name        = models.CharField(max_length=100)
-    slug        = models.SlugField(unique=True)
+    store  = models.ForeignKey('stores.Store', on_delete=models.CASCADE, related_name='categories')
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='children')
+    name   = models.CharField(max_length=100)
+    slug   = models.SlugField()
+    order  = models.PositiveSmallIntegerField(default=0)
     description = models.TextField(blank=True)
     icon        = models.CharField(max_length=50, default='package')  # nom icône Lucide
     color       = models.CharField(max_length=7, default='#2563EB')
-    order       = models.PositiveIntegerField(default=0)
     is_active   = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['order', 'name']
         verbose_name = 'Catégorie'
         verbose_name_plural = 'Catégories'
+        unique_together = [['store', 'parent', 'slug']]
 
     def __str__(self):
         return self.name
@@ -23,6 +29,20 @@ class Category(models.Model):
         if not self.slug:
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
+
+    def clean(self):
+        depth = 1
+        node = self.parent
+        while node is not None:
+            depth += 1
+            if depth > MAX_CATEGORY_DEPTH:
+                raise ValidationError(f"Profondeur maximale de {MAX_CATEGORY_DEPTH} niveaux dépassée.")
+            node = node.parent
+
+    def delete(self, *args, **kwargs):
+        if self.children.exists() or self.products.exists():
+            raise ProtectedError("Catégorie non vide : contient des sous-catégories ou des produits.", self)
+        super().delete(*args, **kwargs)
 
     @property
     def product_count(self):
@@ -33,26 +53,6 @@ class Category(models.Model):
     @product_count.setter
     def product_count(self, value):
         self._product_count = value
-
-
-class SubCategory(models.Model):
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='subcategories')
-    name     = models.CharField(max_length=100)
-    slug     = models.SlugField()
-    order    = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        ordering = ['order', 'name']
-        unique_together = [['category', 'slug']]
-
-    def __str__(self):
-        return f'{self.category.name} > {self.name}'
-
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
-        super().save(*args, **kwargs)
-
 
 class Supplier(models.Model):
     name       = models.CharField(max_length=200)
@@ -89,19 +89,16 @@ class Product(models.Model):
         ('refurbished', 'Reconditionné'),
     ]
 
-    name             = models.CharField(max_length=200, db_index=True)
-    slug             = models.SlugField(unique=True)
-    sku              = models.CharField(max_length=50, unique=True, blank=True)
+    store            = models.ForeignKey('stores.Store', on_delete=models.PROTECT, related_name='products')
     category         = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='products')
-    subcategory      = models.ForeignKey(
-        SubCategory, on_delete=models.SET_NULL, null=True, blank=True
-    )
+    sku              = models.CharField(max_length=64)
+    slug             = models.SlugField()
+    name             = models.CharField(max_length=200, db_index=True)
+    selling_price    = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True)
+    stock_quantity   = models.IntegerField(default=0)
     description      = models.TextField(blank=True)
     specifications   = models.JSONField(default=dict, blank=True)
     condition        = models.CharField(max_length=15, choices=CONDITION_CHOICES, default='new')
-    purchase_price   = models.DecimalField(max_digits=12, decimal_places=0)
-    selling_price    = models.DecimalField(max_digits=12, decimal_places=0)
-    stock_quantity   = models.IntegerField(default=0)
     low_stock_threshold = models.IntegerField(null=True, blank=True)
     image            = models.ImageField(upload_to='products/', blank=True, null=True)
     supplier         = models.ForeignKey(
@@ -115,6 +112,7 @@ class Product(models.Model):
     class Meta:
         ordering = ['-date_added']
         verbose_name = 'Produit'
+        unique_together = [['store', 'sku'], ['store', 'slug']]
 
     def __str__(self):
         return self.name
@@ -132,16 +130,6 @@ class Product(models.Model):
         prefix = (self.category.name[:3]).upper() if self.category_id else 'PRD'
         suffix = uuid.uuid4().hex[:6].upper()
         return f'{prefix}-{self.category_id or 0}-{suffix}'
-
-    @property
-    def margin(self):
-        return self.selling_price - self.purchase_price
-
-    @property
-    def margin_percent(self):
-        if self.purchase_price and self.purchase_price > 0:
-            return round((self.margin / self.purchase_price) * 100, 1)
-        return 0
 
     @property
     def stock_status(self):

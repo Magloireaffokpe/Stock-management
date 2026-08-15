@@ -123,11 +123,10 @@ class Sale(models.Model):
 
 class SaleItem(models.Model):
     sale           = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='items')
-    product        = models.ForeignKey('catalog.Product', on_delete=models.PROTECT)
+    product        = models.ForeignKey('catalog.Product', on_delete=models.SET_NULL, null=True, related_name='sale_items')
     product_name   = models.CharField(max_length=200)   # snapshot nom au moment vente
     quantity       = models.PositiveIntegerField()
     unit_price     = models.DecimalField(max_digits=12, decimal_places=0)  # prix négocié
-    purchase_price = models.DecimalField(max_digits=12, decimal_places=0)  # snapshot marge
     subtotal       = models.DecimalField(max_digits=14, decimal_places=0)
 
     class Meta:
@@ -136,9 +135,8 @@ class SaleItem(models.Model):
             models.Index(fields=['sale', 'product']),
         ]
 
-    @property
-    def margin(self):
-        return (self.unit_price - self.purchase_price) * self.quantity
+    # Margin calculation removed as cost is no longer tracked
+
 
 
 class Quotation(models.Model):
@@ -195,7 +193,6 @@ class Restock(models.Model):
         'catalog.Supplier', on_delete=models.SET_NULL, null=True, blank=True
     )
     restock_date = models.DateField(default=date.today)
-    total_cost   = models.DecimalField(max_digits=14, decimal_places=0, default=0)
     notes        = models.TextField(blank=True)
     created_by   = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True
@@ -219,7 +216,6 @@ class RestockItem(models.Model):
     restock   = models.ForeignKey(Restock, on_delete=models.CASCADE, related_name='items')
     product   = models.ForeignKey('catalog.Product', on_delete=models.PROTECT)
     quantity  = models.PositiveIntegerField()
-    unit_cost = models.DecimalField(max_digits=12, decimal_places=0)
 
     class Meta:
         verbose_name = 'Ligne de réappro'
