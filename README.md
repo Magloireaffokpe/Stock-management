@@ -36,7 +36,14 @@ cd "Stock management"
 docker compose up --build -d
 ```
 
-Sous Windows : double-cliquez sur `start.bat` (racine) — il crée le dossier `backend\data` puis démarre les conteneurs.
+Sans toucher au terminal, lancez simplement le script de démarrage :
+
+| Plateforme | Script (racine) | Effet |
+|---|---|---|
+| Windows | double-clic sur **`start.bat`** | démarre, attend que l'app réponde et ouvre le navigateur |
+| Linux / macOS | **`./start.sh`** | idem |
+
+Le script crée le dossier `backend/data` puis démarre les conteneurs. Il affiche l'adresse et les identifiants de connexion.
 
 Le premier lancement construit les images **backend** et **frontend**. Cela peut prendre plusieurs minutes.
 
@@ -61,12 +68,12 @@ docker compose ps        # les 2 services doivent être "Up"
 
 ### 2.1 Compte initial
 
-Au premier démarrage, le backend crée automatiquement un administrateur :
+Au **premier démarrage uniquement**, le backend crée automatiquement un administrateur (s'il n'existe pas encore) :
 
 - **Nom d'utilisateur :** `admin`
 - **Mot de passe :** `micrologis2026`
 
-> **Changez immédiatement ce mot de passe** après la première connexion (Paramètres → Mon profil).
+> **Changez immédiatement ce mot de passe** après la première connexion (Paramètres → Mon profil). Le mot de passe n'est jamais réinitialisé lors des redémarrages suivants.
 
 ### 2.2 Personnaliser les identifiants (recommandé)
 
@@ -99,14 +106,14 @@ docker compose logs -f    # journaux en direct
 docker compose logs backend -f    # journaux du seul backend
 ```
 
+Sans terminal : `start.bat` / `stop.bat` sous Windows, `./start.sh` / `./stop.sh` sous Linux ou macOS (voir §1.3).
+
 ### Reconstruire après une mise à jour de code
 
 ```bash
 docker compose build      # reconstruit les images (code)
 docker compose up -d      # applique la nouvelle version
 ```
-
-Raccourci Windows : `update.bat` (racine).
 
 ### Nettoyer les images inutilisées
 
