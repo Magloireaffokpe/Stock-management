@@ -111,26 +111,32 @@ Raccourci Windows : `update.bat` (racine).
 ### Nettoyer les images inutilisées
 
 ```bash
-docker image prune -a     # supprime les images non utilisées (attention : re-téléchargement au prochain lancement)
+docker image prune -a     # supprime les images inutilisées (rebuild ou reload au prochain lancement)
 docker system df          # espace disque utilisé par Docker
 ```
 
 ### Sauvegarder / exporter les images (déploiement sans Internet)
 
+Les images **contiennent tout le code nécessaire** (backend Python + dépendances, frontend compilé + Nginx) : le client n'a **pas besoin du code source**, ni de Node/Python, ni d'Internet.
+
 Sur la machine avec Internet (une fois les images construites) :
 
 ```bash
-docker save stockmanagement_backend:latest stockmanagement_frontend:latest -o micrologis-images.tar
+docker save micrologis/backend:latest micrologis/frontend:latest -o micrologis-images.tar
 ```
 
-Puis sur la machine cible, copier le fichier `.tar` :
+Puis sur la machine cible, copier le fichier `.tar` (**~400 Mo**) et le fichier `docker-compose.yml` :
 
 ```bash
+mkdir micrologis && cd micrologis
+# coller docker-compose.yml ici
 docker load -i micrologis-images.tar
 docker compose up -d
 ```
 
-La machine cible n'a alors **jamais besoin d'Internet**.
+La machine cible n'a alors **jamais besoin d'Internet**. Docker crée automatiquement les dossiers de données (`backend/data`, `backend/media`, …) au premier démarrage.
+
+> **Quand le code n'est pas copié, seul le `docker-compose.yml` est nécessaire** (il définit les volumes, le port 80 et les variables). Les images déjà chargées sont utilisées telles quelles — aucun rebuild ne se produit.
 
 ---
 
@@ -143,6 +149,10 @@ La machine cible n'a alors **jamais besoin d'Internet**.
   3. démarre Daphne.
 
 La base vit dans `backend/data/db.sqlite3` (dossier monté dans le conteneur, persistant). Pour repartir d'une base neuve : `docker compose down`, supprimez `backend/data/db.sqlite3`, puis `docker compose up -d`.
+
+> 💾 **Transferer des données existantes au client (pas une image !)** : la base de données **ne doit jamais être intégrée dans une image Docker** (elle serait écrasée à chaque mise à jour d'image). Pour démarrer le client avec vos données, transférez un **fichier de sauvegarde** `.sqlite3` (export depuis Paramètres → Sauvegardes, ou `backend/backup/manual_*.sqlite3`) :
+> - soit déposez-le dans `backend/data/db.sqlite3` **avant** le premier `docker compose up` ;
+> - soit lancez l'app puis Paramètres → Sauvegardes → **Restaurer**.
 
 > ⚠️ **Migration de premier déploiement :** la migration `catalog/0004` vide les anciennes données de catalogue (produits/catégories). Sur une base neuve c'est sans effet (tables déjà vides). Ne déployez **pas** ce dépôt par-dessus une ancienne base remplie sans sauvegarde préalable.
 

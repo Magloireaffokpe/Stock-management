@@ -2,6 +2,7 @@ services:
   backend:
     build:
       context: ./backend
+    image: micrologis/backend:latest
     container_name: micrologis-backend
     restart: always
     environment:
@@ -19,6 +20,7 @@ services:
   frontend:
     build:
       context: ./frontend
+    image: micrologis/frontend:latest
     container_name: micrologis-frontend
     restart: always
     ports:
