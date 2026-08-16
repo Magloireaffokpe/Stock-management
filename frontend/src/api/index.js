@@ -23,6 +23,7 @@ export const authAPI = {
 export const catalogAPI = {
   // Catégories
   categories:       (params) => client.get('/catalog/categories/', { params }),
+  categoryTree:     (storeId) => client.get('/catalog/categories/tree/', { params: { store: storeId } }),
   createCategory:   (data)   => client.post('/catalog/categories/', data),
   updateCategory:   (id, d)  => client.patch(`/catalog/categories/${id}/`, d),
   deleteCategory:   (id)     => client.delete(`/catalog/categories/${id}/`),
@@ -47,6 +48,17 @@ export const catalogAPI = {
   deleteProduct:  (id)     => client.delete(`/catalog/products/${id}/`),
   lowStock:       (params) => client.get('/catalog/products/low-stock/', { params }),
   searchProducts: (q)      => client.get('/catalog/products/search/', { params: { q } }),
+}
+
+// ══════════════════════════════════════════════════════════════
+//  BOUTIQUES
+// ══════════════════════════════════════════════════════════════
+export const storesAPI = {
+  list:   (params) => client.get('/stores/', { params }),
+  get:    (id)     => client.get(`/stores/${id}/`),
+  create: (data)   => client.post('/stores/', data),
+  update: (id, d)  => client.patch(`/stores/${id}/`, d),
+  // DELETE intentionnellement absent (bloqué côté API)
 }
 
 // Fix updateProduct FormData detection
@@ -82,6 +94,8 @@ export const salesAPI = {
   restocks:      (params) => client.get('/sales/restocks/', { params }),
   restock:       (id)     => client.get(`/sales/restocks/${id}/`),
   createRestock: (data)   => client.post('/sales/restocks/create/', data),
+  updateRestock: (id, d)  => client.patch(`/sales/restocks/${id}/`, d),
+  deleteRestock: (id)     => client.delete(`/sales/restocks/${id}/`),
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -105,12 +119,10 @@ export const stockAPI = {
 export const reportsAPI = {
   dashboard:      ()       => client.get('/reports/dashboard/'),
   recentSales:    ()       => client.get('/reports/dashboard/recent-sales/'),
-  dailyChart:     (days)   => client.get('/reports/charts/daily/', { params: { days } }),
-  monthlyChart:   ()       => client.get('/reports/charts/monthly/'),
+  dailyChart:     (days, params = {}) => client.get('/reports/charts/daily/', { params: { days, ...params } }),
+  monthlyChart:   (params = {}) => client.get('/reports/charts/monthly/', { params }),
   categoryChart:  (params) => client.get('/reports/charts/categories/', { params }),
-  paymentMethods: (params) => client.get('/reports/charts/payment-methods/', { params }),
   topProducts:    (params) => client.get('/reports/top-products/', { params }),
-  stockValue:     ()       => client.get('/reports/stock-value/'),
 
   // Télécharge la facture PDF avec le token JWT inclus
   invoicePDF: async (id) => {
@@ -167,6 +179,17 @@ export const downloadBlob = (blob, filename) => {
   a.click()
   a.remove()
   window.URL.revokeObjectURL(url)
+}
+
+// Récupère le nom de fichier fourni par le backend (Content-Disposition).
+// Ex : "attachment; filename=\"ventes_boutique-alpha_2026-08-16.xlsx\""
+export const filenameFromResponse = (res, fallback) => {
+  const cd = res?.headers?.['content-disposition']
+  if (cd) {
+    const match = cd.match(/filename="?([^";]+)"?/)
+    if (match?.[1]) return match[1]
+  }
+  return fallback
 }
 
 export const formatCurrency = (amount, currency = 'FCFA') => {

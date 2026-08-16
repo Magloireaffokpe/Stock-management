@@ -61,7 +61,7 @@ class DatabaseExportView(APIView):
     permission_classes = [IsAdminRole]
 
     def get(self, request):
-        db_path = settings.BASE_DIR / "db.sqlite3"
+        db_path = settings.DB_PATH
         if not db_path.exists():
             raise Http404("Base de données introuvable")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -86,7 +86,7 @@ class DatabaseRestoreView(APIView):
                 {"error": "Fichier manquant"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        db_path = settings.BASE_DIR / "db.sqlite3"
+        db_path = settings.DB_PATH
         backup_dir = settings.BACKUP_DIR
         backup_dir.mkdir(exist_ok=True)
 
@@ -134,7 +134,7 @@ class ManualBackupView(APIView):
     permission_classes = [IsAdminRole]
 
     def post(self, request):
-        db_path = settings.BASE_DIR / "db.sqlite3"
+        db_path = settings.DB_PATH
         if not db_path.exists():
             return Response({"error": "BDD introuvable"}, status=404)
 

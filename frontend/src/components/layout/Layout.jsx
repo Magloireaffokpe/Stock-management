@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, ShoppingCart, Package, Receipt, RefreshCw,
   Boxes, Users, BarChart3, Settings, LogOut, Bell, AlertTriangle,
-  ChevronRight, Store, Shield, Truck, BookOpen
+  ChevronRight, Store, Shield, Truck, BookOpen, X
 } from 'lucide-react'
 import useAuthStore from '../../store/authStore'
 import useAlertStore from '../../store/alertStore'
@@ -24,6 +24,7 @@ const NAV = [
     section: 'Gestion',
     items: [
       { to: '/catalog',  icon: Package,     label: 'Catalogue' },
+      { to: '/stores',   icon: Store,       label: 'Boutiques' },
       { to: '/suppliers',icon: Truck,       label: 'Fournisseurs', adminOnly: true },
       { to: '/sales',    icon: Receipt,     label: 'Ventes' },
       { to: '/restocks', icon: RefreshCw,   label: 'Réappros', adminOnly: true },
@@ -53,6 +54,7 @@ function PageTitle() {
     '/':         'Tableau de bord',
     '/pos':      'Point de vente',
     '/catalog':  'Catalogue produits',
+    '/stores':   'Boutiques',
     '/sales':    'Historique ventes',
     '/restocks': 'Réapprovisionnements',
     '/stock':    'Mouvements de stock',
@@ -210,6 +212,51 @@ export default function Layout() {
         <main className={`page-body ${pathname === '/pos' ? 'page-body-pos' : ''}`}>
           <Outlet />
         </main>
+      </div>
+      {/* Notification d'alerte stock en modale centrale */}
+      <AlertNotificationModal />
+    </div>
+  )
+}
+
+function AlertNotificationModal() {
+  const notification = useAlertStore(s => s.notification)
+  const dismiss = useAlertStore(s => s.dismissNotification)
+  if (!notification) return null
+
+  const cfg = {
+    out:      { label: 'RUPTURE DE STOCK', color: '#991b1b', bg: '#fef2f2' },
+    critical: { label: 'STOCK CRITIQUE',   color: 'var(--danger)', bg: 'var(--danger-light)' },
+    low:      { label: 'STOCK FAIBLE',     color: 'var(--warning)', bg: 'var(--warning-light)' },
+  }[notification.alert_level] || { label: 'ALERTE', color: 'var(--text-muted)', bg: 'var(--bg-main)' }
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 200 }}>
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <div className="modal-header">
+          <span className="modal-title">Alerte stock</span>
+          <button className="btn btn-ghost btn-icon btn-sm" onClick={dismiss}><X size={16} /></button>
+        </div>
+        <div className="modal-body" style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%', margin: '0 auto 14px',
+            background: cfg.bg, color: cfg.color,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <AlertTriangle size={28} />
+          </div>
+          <h3 style={{ margin: '0 0 6px', fontSize: '1.05rem' }}>{notification.product_name}</h3>
+          <span style={{
+            display: 'inline-block', fontSize: '0.72rem', fontWeight: 800, padding: '3px 12px',
+            background: cfg.color, color: '#fff', borderRadius: 99, letterSpacing: 0.5, marginBottom: 10,
+          }}>{cfg.label}</span>
+          <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+            Stock restant : <strong style={{ color: cfg.color }}>{notification.stock_quantity} unité(s)</strong>
+          </p>
+        </div>
+        <div className="modal-footer" style={{ justifyContent: 'center' }}>
+          <button className="btn btn-primary" onClick={dismiss}>Compris</button>
+        </div>
       </div>
     </div>
   )

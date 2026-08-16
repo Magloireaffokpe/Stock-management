@@ -4,11 +4,10 @@ from . import views
 urlpatterns = [
     # Catégories
     path('categories/', views.CategoryListCreateView.as_view(), name='category-list'),
+    path('categories/tree/', views.CategoryTreeView.as_view(), name='category-tree'),
     path('categories/<int:pk>/', views.CategoryDetailView.as_view(), name='category-detail'),
 
     # Sous-catégories
-    path('subcategories/', views.SubCategoryListCreateView.as_view(), name='subcategory-list'),
-    path('subcategories/<int:pk>/', views.SubCategoryDetailView.as_view(), name='subcategory-detail'),
 
     # Fournisseurs
     path('suppliers/', views.SupplierListCreateView.as_view(), name='supplier-list'),

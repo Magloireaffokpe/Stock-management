@@ -133,7 +133,7 @@ function ClientModal({ client, onClose, onSaved }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal">
         <div className="modal-header">
           <span className="modal-title">{isEdit ? 'Modifier le client' : 'Nouveau client'}</span>

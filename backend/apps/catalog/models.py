@@ -30,14 +30,19 @@ class Category(models.Model):
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
-    def clean(self):
+    @classmethod
+    def validate_depth(cls, parent):
         depth = 1
-        node = self.parent
+        node = parent
         while node is not None:
             depth += 1
             if depth > MAX_CATEGORY_DEPTH:
                 raise ValidationError(f"Profondeur maximale de {MAX_CATEGORY_DEPTH} niveaux dépassée.")
             node = node.parent
+
+    def clean(self):
+        if self.parent:
+            self.validate_depth(self.parent)
 
     def delete(self, *args, **kwargs):
         if self.children.exists() or self.products.exists():

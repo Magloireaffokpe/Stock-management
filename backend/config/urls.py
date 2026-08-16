@@ -11,6 +11,7 @@ urlpatterns = [
     path('api/auth/', include('apps.auth_app.urls')),
 
     # Apps métier
+    path('api/stores/', include('apps.stores.urls')),
     path('api/catalog/', include('apps.catalog.urls')),
     path('api/sales/', include('apps.sales.urls')),
     path('api/stock/', include('apps.stock.urls')),

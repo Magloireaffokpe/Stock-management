@@ -10,6 +10,7 @@ import DashboardPage from './pages/Dashboard/DashboardPage'
 import POSPage from './pages/POS/POSPage'
 import CatalogPage from './pages/Catalog/CatalogPage'
 import ProductDetailPage from './pages/Catalog/ProductDetailPage'
+import StoresPage from './pages/Catalog/StoresPage'
 import SuppliersPage from './pages/Catalog/SuppliersPage'
 import SalesPage from './pages/Sales/SalesPage'
 import SaleDetailPage from './pages/Sales/SaleDetailPage'
@@ -92,6 +93,7 @@ export default function App() {
         <Route path="pos" element={<POSPage />} />
         <Route path="catalog" element={<CatalogPage />} />
         <Route path="catalog/:id" element={<ProductDetailPage />} />
+        <Route path="stores" element={<StoresPage />} />
         <Route path="suppliers" element={<RequireAdmin><SuppliersPage /></RequireAdmin>} />
         <Route path="sales" element={<SalesPage />} />
         <Route path="sales/:id" element={<SaleDetailPage />} />

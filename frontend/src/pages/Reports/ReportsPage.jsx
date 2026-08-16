@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Download, RefreshCw, TrendingUp, Package, BarChart3, Calendar } from 'lucide-react'
+import { Download, RefreshCw, Package, BarChart3, Calendar } from 'lucide-react'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
-import { reportsAPI, formatCurrency, downloadBlob } from '../../api'
+import { reportsAPI, storesAPI, formatCurrency, downloadBlob, filenameFromResponse } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
 import toast from 'react-hot-toast'
 
@@ -59,10 +59,10 @@ export default function ReportsPage() {
   const [daily, setDaily]       = useState([])
   const [topProds, setTopProds] = useState([])
   const [catData, setCatData]   = useState([])
-  const [payData, setPayData]   = useState([])
-  const [stockVal, setStockVal] = useState(null)
   const [days, setDays]         = useState(30)
   const [loading, setLoading]   = useState(true)
+  const [storeFilter, setStoreFilter] = useState(() => localStorage.getItem('reports_store_filter') || '')
+  const [stores, setStores] = useState([])
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
   const [exporting, setExporting] = useState('')
@@ -70,43 +70,57 @@ export default function ReportsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const params = { ...(dateFrom && { date_from: dateFrom }), ...(dateTo && { date_to: dateTo }) }
-      const [mo, da, top, cat, pay, sv] = await Promise.all([
-        reportsAPI.monthlyChart(),
-        reportsAPI.dailyChart(days),
+      const params = { 
+        ...(dateFrom && { date_from: dateFrom }), 
+        ...(dateTo && { date_to: dateTo }),
+        ...(storeFilter && { store: storeFilter })
+      }
+      const [mo, da, top, cat] = await Promise.all([
+        reportsAPI.monthlyChart(params),
+        reportsAPI.dailyChart(days, params),
         reportsAPI.topProducts({ ...params, limit: 10 }),
         reportsAPI.categoryChart(params),
-        reportsAPI.paymentMethods(params),
-        reportsAPI.stockValue(),
       ])
       setMonthly(mo.data)
       setDaily(da.data)
       setTopProds(top.data)
       setCatData(cat.data)
-      setPayData(pay.data)
-      setStockVal(sv.data)
     } catch { toast.error('Erreur chargement rapports') }
     finally { setLoading(false) }
-  }, [days, dateFrom, dateTo])
+  }, [days, dateFrom, dateTo, storeFilter])
+
+  useEffect(() => {
+    storesAPI.list().then(res => setStores(res.data?.results ?? res.data ?? []))
+  }, [])
 
   useEffect(() => { load() }, [load])
+
+  const handleStoreChange = (val) => {
+    setStoreFilter(val)
+    if (val) localStorage.setItem('reports_store_filter', val)
+    else localStorage.removeItem('reports_store_filter')
+  }
 
   const handleExport = async (type) => {
     setExporting(type)
     try {
-      const params = { ...(dateFrom && { date_from: dateFrom }), ...(dateTo && { date_to: dateTo }) }
+      const params = { 
+        ...(dateFrom && { date_from: dateFrom }), 
+        ...(dateTo && { date_to: dateTo }),
+        ...(storeFilter && { store: storeFilter })
+      }
       let res, filename
       if (type === 'sales')    { res = await reportsAPI.exportSales(params);    filename = 'ventes.xlsx' }
       if (type === 'products') { res = await reportsAPI.exportProducts(params);  filename = 'produits.xlsx' }
-      if (type === 'movements'){ res = await reportsAPI.exportMovements(params); filename = 'mouvements.xlsx' }
-      downloadBlob(res.data, filename)
+      if (type === 'movements'){ res = await reportsAPI.exportMovements(params); filename = 'mouvements_stock.xlsx' }
+      downloadBlob(res.data, filenameFromResponse(res, filename))
       toast.success('Export téléchargé')
     } catch { toast.error('Erreur export') }
     finally { setExporting('') }
   }
 
-  const TABS = ['overview','products','stock']
-  const TAB_LABELS = { overview:'Vue d\'ensemble', products:'Top produits', stock:'Valeur du stock' }
+  const TABS = ['overview','products']
+  const TAB_LABELS = { overview:'Vue d\'ensemble', products:'Top produits' }
 
   return (
     <div>
@@ -116,6 +130,10 @@ export default function ReportsPage() {
           <p className="page-subtitle">Données en temps réel</p>
         </div>
         <div className="page-header-actions">
+          <select className="input" style={{ width: 180 }} value={storeFilter} onChange={e => handleStoreChange(e.target.value)}>
+            <option value="">Toutes les boutiques</option>
+            {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
           <div style={{ display:'flex', alignItems:'center', gap:6 }}>
             <Calendar size={14} style={{ color:'var(--text-muted)' }} />
             <input type="date" className="input" style={{ width:136 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
@@ -197,13 +215,12 @@ export default function ReportsPage() {
                       <YAxis tickFormatter={v => v>=1000?`${(v/1000).toFixed(0)}k`:v} tick={{ fontSize:11, fill:'var(--text-muted)' }} axisLine={false} tickLine={false} />
                       <Tooltip content={<CustomTooltip currency={currency} />} />
                       <Line type="monotone" dataKey="revenue" name={`CA (${currency})`} stroke="var(--blue-500)" strokeWidth={2.5} dot={false} activeDot={{ r:5 }} />
-                      <Line type="monotone" dataKey="profit" name={`Bénéfice (${currency})`} stroke="var(--success)" strokeWidth={2} dot={false} strokeDasharray="5 4" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:20 }}>
                 {/* Répartition catégories */}
                 <div className="card">
                   <div className="card-header"><span className="card-title">CA par catégorie</span></div>
@@ -258,37 +275,6 @@ export default function ReportsPage() {
                     })()}
                   </div>
                 </div>
-
-                {/* Méthodes de paiement */}
-                <div className="card">
-                  <div className="card-header"><span className="card-title">Modes de paiement</span></div>
-                  <div className="card-body">
-                    {payData.length === 0 ? (
-                      <div className="empty-state" style={{ padding:'20px 10px' }}><p>Aucune donnée</p></div>
-                    ) : (
-                      <>
-                        {payData.map((p,i) => {
-                          const maxVal = Math.max(...payData.map(x => x.total || 0))
-                          const pct = maxVal > 0 ? ((p.total||0) / maxVal * 100) : 0
-                          const labels = { cash:'Espèces',mtn:'MTN MoMo',moov:'Moov',card:'Carte',transfer:'Virement',mixed:'Mixte' }
-                          return (
-                            <div key={i} style={{ marginBottom:12 }}>
-                              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4, fontSize:'0.82rem' }}>
-                                <span style={{ fontWeight:600 }}>{labels[p.payment_method] || p.payment_method}</span>
-                                <span style={{ fontFamily:'var(--font-mono)', fontSize:'0.78rem', color:'var(--text-muted)' }}>
-                                  {p.count} vente(s) — {formatCurrency(p.total, currency)}
-                                </span>
-                              </div>
-                              <div style={{ height:6, background:'var(--bg-main)', borderRadius:99, overflow:'hidden' }}>
-                                <div style={{ height:'100%', width:`${pct}%`, background:COLORS[i%COLORS.length], borderRadius:99, transition:'width 0.5s ease' }} />
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </>
-                    )}
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -306,7 +292,6 @@ export default function ReportsPage() {
                       <th>#</th><th>Produit</th><th>Catégorie</th>
                       <th style={{textAlign:'center'}}>Qté vendue</th>
                       <th style={{textAlign:'right'}}>CA total</th>
-                      <th style={{textAlign:'right'}}>Bénéfice</th>
                     </tr></thead>
                     <tbody>
                       {topProds.map((p, idx) => (
@@ -324,36 +309,11 @@ export default function ReportsPage() {
                           <td><span className="badge badge-blue" style={{ fontSize:'0.68rem' }}>{p.product__category__name}</span></td>
                           <td style={{ textAlign:'center' }}><span style={{ fontFamily:'var(--font-mono)', fontWeight:700 }}>{p.total_qty}</span></td>
                           <td className="text-right"><span style={{ fontFamily:'var(--font-mono)', fontWeight:700 }}>{formatCurrency(p.total_revenue, currency)}</span></td>
-                          <td className="text-right"><span style={{ fontFamily:'var(--font-mono)', fontWeight:700, color:'var(--success)' }}>+{formatCurrency(p.total_margin, currency)}</span></td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* ── VALEUR STOCK ─── */}
-          {tab === 'stock' && stockVal && (
-            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
-                {[
-                  { label:'Valeur d\'achat totale', value: formatCurrency(stockVal.purchase_value, currency), color:'var(--info)', bg:'var(--info-light)' },
-                  { label:'Valeur de vente totale', value: formatCurrency(stockVal.selling_value, currency), color:'var(--blue-600)', bg:'var(--blue-100)' },
-                  { label:'Bénéfice potentiel', value: formatCurrency(stockVal.potential_profit, currency), color:'var(--success)', bg:'var(--success-light)' },
-                  { label:'Produits actifs', value: stockVal.total_products, color:'var(--orange-500)', bg:'var(--orange-100)' },
-                  { label:'Unités en stock', value: stockVal.total_units, color:'var(--navy-800)', bg:'var(--blue-50)' },
-                ].map(card => (
-                  <div key={card.label} className="card" style={{ padding:'20px 22px' }}>
-                    <div style={{ fontSize:'0.72rem', fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>{card.label}</div>
-                    <div style={{ fontFamily:'var(--font-mono)', fontSize:'1.5rem', fontWeight:800, color:card.color }}>{card.value}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="alert-banner info">
-                <TrendingUp size={16} />
-                Le bénéfice potentiel représente la marge si tout le stock actuel est vendu au prix catalogue.
               </div>
             </div>
           )}

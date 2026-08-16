@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Search, RefreshCw, X, SlidersHorizontal, Plus, AlertTriangle, Download, Package } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { stockAPI, reportsAPI, catalogAPI, formatCurrency, formatDatetime, downloadBlob } from '../../api'
+import { stockAPI, reportsAPI, catalogAPI, storesAPI, formatCurrency, formatDatetime, downloadBlob, filenameFromResponse } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
 import useAuthStore from '../../store/authStore'
 import toast from 'react-hot-toast'
 
 const MOVE_TYPES = {
-  sale:'Vente',sale_cancel:'Annulation',restock:'Réappro',
+  sale:'Vente',sale_cancel:'Annulation',restock:'Réappro',restock_cancel:'Annulation réappro',
   adjustment:'Ajustement',loss:'Perte/Casse',return:'Retour',initial:'Stock initial',
 }
 const MOVE_COLORS = {
-  sale:'var(--danger)',sale_cancel:'var(--success)',restock:'var(--success)',
+  sale:'var(--danger)',sale_cancel:'var(--success)',restock:'var(--success)',restock_cancel:'var(--danger)',
   adjustment:'var(--info)',loss:'var(--warning)',return:'var(--blue-500)',initial:'var(--text-muted)',
 }
 
@@ -24,6 +24,8 @@ export default function StockPage() {
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [storeFilter, setStoreFilter] = useState(() => localStorage.getItem('stock_store_filter') || '')
+  const [stores, setStores] = useState([])
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
   const [page, setPage]         = useState(1)
@@ -39,6 +41,7 @@ export default function StockPage() {
         page, page_size: pageSize, ordering: '-created_at',
         ...(search && { search }),
         ...(typeFilter && { movement_type: typeFilter }),
+        ...(storeFilter && { store: storeFilter }),
         ...(dateFrom && { date_from: dateFrom }),
         ...(dateTo && { date_to: dateTo }),
       }
@@ -52,10 +55,14 @@ export default function StockPage() {
   const loadAlerts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await stockAPI.alerts()
+      const res = await stockAPI.alerts(storeFilter ? { store: storeFilter } : {})
       setAlerts(res.data?.results ?? res.data ?? [])
     } catch {}
     finally { setLoading(false) }
+  }, [storeFilter])
+
+  useEffect(() => {
+    storesAPI.list().then(res => setStores(res.data?.results ?? res.data ?? []))
   }, [])
 
   useEffect(() => { tab === 'movements' ? loadMovements() : loadAlerts() }, [tab, loadMovements, loadAlerts])
@@ -74,11 +81,24 @@ export default function StockPage() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const res = await reportsAPI.exportMovements()
-      downloadBlob(res.data, 'mouvements_stock.xlsx')
+      const params = {
+        ...(typeFilter && { movement_type: typeFilter }),
+        ...(storeFilter && { store: storeFilter }),
+        ...(dateFrom && { date_from: dateFrom }),
+        ...(dateTo && { date_to: dateTo }),
+      }
+      const res = await reportsAPI.exportMovements(params)
+      downloadBlob(res.data, filenameFromResponse(res, 'mouvements_stock.xlsx'))
       toast.success('Export téléchargé')
     } catch { toast.error('Erreur export') }
     finally { setExporting(false) }
+  }
+
+  const handleStoreChange = (val) => {
+    setStoreFilter(val)
+    if (val) localStorage.setItem('stock_store_filter', val)
+    else localStorage.removeItem('stock_store_filter')
+    setPage(1)
   }
 
   const totalPages = Math.ceil(totalCount / pageSize)
@@ -103,19 +123,27 @@ export default function StockPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display:'flex', gap:4, marginBottom:20, background:'var(--bg-card)', borderRadius:'var(--radius-lg)', padding:4, border:'1px solid var(--border)', width:'fit-content' }}>
-        {[
-          { key:'movements', label:'Mouvements de stock' },
-          { key:'alerts',    label:'Alertes' },
-        ].map(t => (
-          <button key={t.key} onClick={() => { setTab(t.key); setPage(1) }} style={{
-            padding:'7px 18px', borderRadius:'var(--radius-md)', border:'none', cursor:'pointer',
-            fontFamily:'var(--font-body)', fontSize:'0.875rem', fontWeight:600,
-            background: tab===t.key ? 'var(--blue-600)' : 'transparent',
-            color: tab===t.key ? '#fff' : 'var(--text-secondary)',
-            transition:'all 0.15s',
-          }}>{t.label}</button>
-        ))}
+      <div style={{ display:'flex', gap:20, alignItems: 'center', marginBottom:20 }}>
+        <div style={{ display:'flex', gap:4, background:'var(--bg-card)', borderRadius:'var(--radius-lg)', padding:4, border:'1px solid var(--border)', width:'fit-content' }}>
+          {[
+            { key:'movements', label:'Mouvements de stock' },
+            { key:'alerts',    label:'Alertes' },
+          ].map(t => (
+            <button key={t.key} onClick={() => { setTab(t.key); setPage(1) }} style={{
+              padding:'7px 18px', borderRadius:'var(--radius-md)', border:'none', cursor:'pointer',
+              fontFamily:'var(--font-body)', fontSize:'0.875rem', fontWeight:600,
+              background: tab===t.key ? 'var(--blue-600)' : 'transparent',
+              color: tab===t.key ? '#fff' : 'var(--text-secondary)',
+              transition:'all 0.15s',
+            }}>{t.label}</button>
+          ))}
+        </div>
+
+        {/* Global Store Filter */}
+        <select className="input" style={{ width: 200, padding: '6px 12px' }} value={storeFilter} onChange={e => handleStoreChange(e.target.value)}>
+          <option value="">Toutes les boutiques</option>
+          {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       </div>
 
       {/* Mouvements */}
@@ -330,7 +358,7 @@ function AdjustmentModal({ currency, onClose, onSaved }) {
 
   const handleSave = async () => {
     if (!form.product_id || !form.quantity) { toast.error('Produit et quantité requis'); return }
-    if (!confirm(`Voulez-vous vraiment appliquer cet ajustement de stock ? Cette opération est irréversible.`)) return
+    if (!confirm(`Voulez-vous vraiment appliquer cet ajustement de stock ? Un mouvement sera enregistré.`)) return
     
     setSaving(true)
     try {
@@ -346,7 +374,7 @@ function AdjustmentModal({ currency, onClose, onSaved }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal">
         <div className="modal-header">
           <span className="modal-title">Ajustement de stock</span>

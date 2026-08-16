@@ -6,6 +6,7 @@ import io
 from datetime import date
 
 from django.http import HttpResponse
+from django.utils.text import slugify
 
 try:
     import openpyxl
@@ -21,6 +22,16 @@ HEADER_FONT  = Font(color='FFFFFF', bold=True) if OPENPYXL_AVAILABLE else None
 ACCENT_FILL  = PatternFill('solid', fgColor='EFF6FF') if OPENPYXL_AVAILABLE else None
 
 
+def _build_filename(base, store_label=None):
+    """Nom de fichier distinct selon l'export et la boutique choisie.
+    Ex : ventes_boutique-a_2026-08-16.xlsx / ventes_2026-08-16.xlsx"""
+    today = date.today().isoformat()
+    if store_label:
+        label = slugify(store_label) or 'boutique'
+        return f'{base}_{label}_{today}.xlsx'
+    return f'{base}_{today}.xlsx'
+
+
 def _auto_width(ws):
     """Ajuste automatiquement la largeur des colonnes"""
     for col in ws.columns:
@@ -34,8 +45,13 @@ def _auto_width(ws):
         ws.column_dimensions[col_letter].width = min(max_len + 4, 50)
 
 
-def export_sales_excel(queryset):
-    """Export de l'historique des ventes"""
+def export_sales_excel(queryset, store_label=None):
+    """Export de l'historique des ventes avec le détail des produits vendus.
+
+    Une seule feuille : une ligne par article vendu. Les colonnes propres
+    à la vente (facture, date, client, total, paiement, statut, caissier)
+    sont fusionnées verticalement sur les lignes d'articles de cette vente.
+    """
     if not OPENPYXL_AVAILABLE:
         return None
 
@@ -43,8 +59,8 @@ def export_sales_excel(queryset):
     ws = wb.active
     ws.title = 'Historique ventes'
 
-    headers = ['N° Facture', 'Date', 'Client', 'Sous-total', 'Remise',
-               'TVA', 'Total', 'Paiement', 'Statut', 'Caissier']
+    headers = ['N° Facture', 'Date', 'Client', 'Produit', 'Qté',
+               'Prix unitaire', 'Total ligne', 'Total', 'Statut', 'Caissier']
     ws.append(headers)
 
     for cell in ws[1]:
@@ -52,19 +68,35 @@ def export_sales_excel(queryset):
         cell.font = HEADER_FONT
         cell.alignment = Alignment(horizontal='center')
 
+    # Colonnes propres à la vente (1-based) fusionnées sur les lignes d'articles
+    SALE_MERGE_COLS = [1, 2, 3, 8, 9, 10]
+    row = 2
+
     for sale in queryset:
-        ws.append([
-            sale.invoice_number,
-            sale.sale_date.strftime('%d/%m/%Y %H:%M'),
-            sale.client.full_name if sale.client else 'Client comptoir',
-            float(sale.subtotal),
-            float(sale.discount),
-            float(sale.tax_amount),
-            float(sale.total_amount),
-            sale.get_payment_method_display(),
-            'Annulée' if sale.is_cancelled else 'Validée',
-            sale.created_by.get_full_name() if sale.created_by else '',
-        ])
+        items = list(sale.items.all())
+        if not items:
+            continue
+
+        start = row
+        for item in items:
+            ws.append([
+                sale.invoice_number,
+                sale.sale_date.strftime('%d/%m/%Y %H:%M'),
+                sale.client.full_name if sale.client else 'Client comptoir',
+                item.product_name,
+                item.quantity,
+                float(item.unit_price),
+                float(item.subtotal),
+                float(sale.total_amount),
+                'Annulée' if sale.is_cancelled else 'Validée',
+                sale.created_by.get_full_name() if sale.created_by else '',
+            ])
+            row += 1
+
+        if row - 1 > start:
+            for col in SALE_MERGE_COLS:
+                ws.merge_cells(start_row=start, start_column=col,
+                               end_row=row - 1, end_column=col)
 
     _auto_width(ws)
 
@@ -72,7 +104,7 @@ def export_sales_excel(queryset):
     wb.save(buffer)
     buffer.seek(0)
 
-    filename = f'ventes_{date.today().isoformat()}.xlsx'
+    filename = _build_filename('ventes', store_label)
     response = HttpResponse(
         buffer.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -81,7 +113,7 @@ def export_sales_excel(queryset):
     return response
 
 
-def export_products_excel(queryset):
+def export_products_excel(queryset, store_id=None, store_label=None):
     """Export du catalogue produits"""
     if not OPENPYXL_AVAILABLE:
         return None
@@ -90,9 +122,22 @@ def export_products_excel(queryset):
     ws = wb.active
     ws.title = 'Catalogue produits'
 
-    headers = ['SKU', 'Nom', 'Catégorie', 'Fournisseur', 'État',
-               'Prix achat', 'Prix vente', 'Marge', 'Marge %',
-               'Stock', 'Statut stock', 'Actif']
+    def get_category_path(category):
+        if not category:
+            return ""
+        path_parts = []
+        current = category
+        while current:
+            path_parts.insert(0, current.name)
+            current = current.parent
+        return " > ".join(path_parts)
+
+    if store_id:
+        headers = ['SKU', 'Nom', 'Chemin catégorie', 'Fournisseur', 'État',
+                   'Prix vente', 'Stock', 'Statut stock', 'Actif']
+    else:
+        headers = ['Boutique', 'SKU', 'Nom', 'Chemin catégorie', 'Fournisseur', 'État',
+                   'Prix vente', 'Stock', 'Statut stock', 'Actif']
     ws.append(headers)
 
     for cell in ws[1]:
@@ -101,20 +146,25 @@ def export_products_excel(queryset):
         cell.alignment = Alignment(horizontal='center')
 
     for product in queryset:
-        ws.append([
+        cat_path = get_category_path(product.category)
+        selling_price = float(product.selling_price) if product.selling_price is not None else 0.0
+
+        row_data = []
+        if not store_id:
+            row_data.append(product.store.name if product.store else '')
+
+        row_data.extend([
             product.sku,
             product.name,
-            product.category.name,
+            cat_path,
             product.supplier.name if product.supplier else '',
             product.get_condition_display(),
-            float(product.purchase_price),
-            float(product.selling_price),
-            float(product.margin),
-            float(product.margin_percent),
+            selling_price,
             product.stock_quantity,
             product.stock_status,
             'Oui' if product.is_active else 'Non',
         ])
+        ws.append(row_data)
 
     _auto_width(ws)
 
@@ -122,7 +172,7 @@ def export_products_excel(queryset):
     wb.save(buffer)
     buffer.seek(0)
 
-    filename = f'produits_{date.today().isoformat()}.xlsx'
+    filename = _build_filename('produits', store_label)
     response = HttpResponse(
         buffer.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -131,7 +181,8 @@ def export_products_excel(queryset):
     return response
 
 
-def export_stock_movements_excel(queryset):
+def export_stock_movements_excel(queryset, store_label=None):
+    """Export des mouvements de stock"""
     """Export des mouvements de stock"""
     if not OPENPYXL_AVAILABLE:
         return None
@@ -168,7 +219,7 @@ def export_stock_movements_excel(queryset):
     wb.save(buffer)
     buffer.seek(0)
 
-    filename = f'mouvements_stock_{date.today().isoformat()}.xlsx'
+    filename = _build_filename('mouvements_stock', store_label)
     response = HttpResponse(
         buffer.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

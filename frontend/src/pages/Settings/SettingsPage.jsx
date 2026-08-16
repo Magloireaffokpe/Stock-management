@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   Save, Upload, Download, RefreshCw, Database, Users, Shield,
-  Bell, Palette, FileText, X, Plus, Trash2, Eye, EyeOff, Lock
+  Bell, Palette, FileText, X, Plus, Trash2, Eye, EyeOff, Lock, Pencil
 } from 'lucide-react'
 import { settingsAPI, authAPI, formatDate, downloadBlob } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
@@ -418,7 +418,7 @@ function UsersTab() {
                   </td>
                   <td>
                     <div style={{ display:'flex', gap:4 }}>
-                      <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setEditUser(u); setShowModal(true) }}><Eye size={14} /></button>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setEditUser(u); setShowModal(true) }} data-tooltip="Modifier"><Pencil size={14} /></button>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={() => toggleActive(u)} data-tooltip={u.is_active?'Désactiver':'Réactiver'}>
                         <Shield size={14} style={{ color: u.is_active ? 'var(--success)' : 'var(--text-muted)' }} />
                       </button>
@@ -453,6 +453,7 @@ function UserModal({ user, onClose, onSaved }) {
     first_name: user?.first_name || '',
     last_name:  user?.last_name  || '',
     email:      user?.email      || '',
+    phone:      user?.phone      || '',
     role:       user?.role       || 'employee',
     password:   '',
   })
@@ -482,7 +483,7 @@ function UserModal({ user, onClose, onSaved }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal">
         <div className="modal-header">
           <span className="modal-title">{isEdit ? `Modifier — ${user.username}` : 'Nouvel utilisateur'}</span>
@@ -492,7 +493,7 @@ function UserModal({ user, onClose, onSaved }) {
           <div className="grid-2" style={{ marginBottom:12 }}>
             <div className="input-group">
               <label className="input-label">Nom d'utilisateur *</label>
-              <input className="input" value={form.username} onChange={e => set('username', e.target.value)} disabled={isEdit} />
+              <input className="input" value={form.username} onChange={e => set('username', e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">Rôle</label>
@@ -509,9 +510,13 @@ function UserModal({ user, onClose, onSaved }) {
               <label className="input-label">Nom</label>
               <input className="input" value={form.last_name} onChange={e => set('last_name', e.target.value)} />
             </div>
-            <div className="input-group" style={{ gridColumn:'1/-1' }}>
+            <div className="input-group">
               <label className="input-label">Email</label>
               <input className="input" type="email" value={form.email} onChange={e => set('email', e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Téléphone</label>
+              <input className="input" type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+229 00 00 00 00" />
             </div>
             <div className="input-group" style={{ gridColumn:'1/-1' }}>
               <label className="input-label">{isEdit ? 'Nouveau mot de passe (laisser vide = inchangé)' : 'Mot de passe *'}</label>

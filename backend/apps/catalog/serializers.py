@@ -1,23 +1,22 @@
 from decimal import Decimal
 
 from rest_framework import serializers
-from .models import Category, SubCategory, Supplier, Product
+from .models import Category, Supplier, Product
 
-
-class SubCategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SubCategory
-        fields = ["id", "category", "name", "slug", "order"]
 
 
 class CategorySerializer(serializers.ModelSerializer):
-    subcategories = SubCategorySerializer(many=True, read_only=True)
     product_count = serializers.IntegerField(read_only=True)
+    store_name = serializers.CharField(source="store.name", read_only=True)
+    parent = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), required=False, allow_null=True)
 
     class Meta:
         model = Category
         fields = [
             "id",
+            "store",
+            "store_name",
+            "parent",
             "name",
             "slug",
             "description",
@@ -25,10 +24,30 @@ class CategorySerializer(serializers.ModelSerializer):
             "color",
             "order",
             "is_active",
-            "subcategories",
             "product_count",
         ]
         read_only_fields = ["id", "slug"]
+
+    def validate(self, attrs):
+        parent = attrs.get('parent')
+        store = attrs.get('store')
+
+        if self.instance:
+            if parent is None and 'parent' not in attrs:
+                parent = self.instance.parent
+            if store is None and 'store' not in attrs:
+                store = self.instance.store
+
+        if parent and store:
+            if parent.store_id != store.id:
+                raise serializers.ValidationError({"parent": "La catégorie parente doit appartenir à la même boutique."})
+            
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                Category.validate_depth(parent)
+            except DjangoValidationError as e:
+                raise serializers.ValidationError({"parent": list(e.messages)})
+        return attrs
 
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -56,12 +75,8 @@ class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     category_color = serializers.CharField(source="category.color", read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
+    store_name = serializers.CharField(source="store.name", read_only=True)
     stock_status = serializers.CharField(read_only=True)
-    purchase_price = serializers.DecimalField(
-        max_digits=12, decimal_places=0, read_only=True
-    )
-    margin = serializers.DecimalField(max_digits=12, decimal_places=0, read_only=True)
-    margin_percent = serializers.FloatField(read_only=True)
     is_active = serializers.BooleanField(default=True, required=False)
     image_url = serializers.SerializerMethodField()
 
@@ -69,21 +84,19 @@ class ProductListSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             "id",
+            "store",
+            "store_name",
             "name",
             "slug",
             "sku",
             "category",
             "category_name",
             "category_color",
-            "subcategory",
             "condition",
-            "purchase_price",
             "selling_price",
             "stock_quantity",
             "stock_status",
             "low_stock_threshold",
-            "margin",
-            "margin_percent",
             "image_url",
             "supplier",
             "supplier_name",
@@ -94,24 +107,31 @@ class ProductListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "slug", "sku", "date_added", "last_updated"]
 
-    def _can_view_sensitive_fields(self, request=None):
-        if not request:
-            return True
-        user = getattr(request, "user", None)
-        return bool(
-            getattr(user, "is_staff", False)
-            or getattr(user, "is_superuser", False)
-            or getattr(user, "role", "") == "admin"
-        )
-
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        request = self.context.get("request")
-        if not self._can_view_sensitive_fields(request):
-            data.pop("purchase_price", None)
-            data.pop("margin", None)
-            data.pop("margin_percent", None)
         return data
+
+    def validate(self, attrs):
+        category = attrs.get('category')
+        store = attrs.get('store')
+
+        if self.instance:
+            if store and store != self.instance.store:
+                raise serializers.ValidationError({"store": "La boutique d'un produit ne peut pas être modifiée après sa création."})
+            if category is None and 'category' not in attrs:
+                category = self.instance.category
+            if store is None and 'store' not in attrs:
+                store = self.instance.store
+        else:
+            if not store:
+                raise serializers.ValidationError({"store": "Ce champ est obligatoire."})
+            if not category:
+                raise serializers.ValidationError({"category": "Ce champ est obligatoire."})
+
+        if category and store:
+            if category.store_id != store.id:
+                raise serializers.ValidationError({"category": "La catégorie doit appartenir à la même boutique que le produit."})
+        return attrs
 
     def get_image_url(self, obj):
         if obj.image:
@@ -124,13 +144,6 @@ class ProductListSerializer(serializers.ModelSerializer):
 
 class ProductDetailSerializer(ProductListSerializer):
     """Serializer complet avec descriptions et specs"""
-
-    # ProductListSerializer masks this field for employees and declares it
-    # read-only. Product creation/update is admin-only, so it must be writable
-    # here and validated before reaching the database.
-    purchase_price = serializers.DecimalField(
-        max_digits=12, decimal_places=0, min_value=Decimal("0")
-    )
 
     class Meta(ProductListSerializer.Meta):
         fields = ProductListSerializer.Meta.fields + ["description", "specifications"]

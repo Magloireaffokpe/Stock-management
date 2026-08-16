@@ -40,13 +40,38 @@ def make_employee(username='employee_test', password='testpass123'):
     )
 
 
+# ── BOUTIQUES ────────────────────────────────────────────────────
+
+def make_store(name=None, slug=None, is_active=True, order=0):
+    from apps.stores.models import Store
+    if name is None:
+        uid = _uid()
+        name = f'Store-{uid}'
+        if slug is None:
+            slug = f'store-{uid}'
+    elif slug is None:
+        from django.utils.text import slugify
+        slug = slugify(name)
+    return Store.objects.create(
+        name=name,
+        slug=slug,
+        is_active=is_active,
+        order=order,
+    )
+
+
 # ── CATALOGUE ────────────────────────────────────────────────────
 
-def make_category(name=None, color='#2563EB', order=1):
+def make_category(name=None, color='#2563EB', order=1, store=None, parent=None):
     from apps.catalog.models import Category
+    from apps.stores.models import Store
+    if store is None:
+        store, _ = Store.objects.get_or_create(slug='default', defaults={'name': 'Boutique par défaut'})
     if name is None:
         name = f'Cat-{_uid()}'
     return Category.objects.create(
+        store=store,
+        parent=parent,
         name=name,
         color=color,
         icon='laptop',
@@ -70,24 +95,29 @@ def make_product(
     name=None,
     category=None,
     supplier=None,
-    purchase_price=10000,
+    store=None,
     selling_price=15000,
     stock_quantity=20,
     low_stock_threshold=5,
     condition='new',
     is_active=True,
+    **kwargs,
 ):
     from apps.catalog.models import Product
+    from apps.stores.models import Store
     if name is None:
         name = f'Produit-{_uid()}'
     if category is None:
-        category = make_category()
+        category = make_category(store=store)
+    if store is None:
+        store = category.store
+    selling_price_val = Decimal(selling_price) if selling_price is not None else None
     return Product.objects.create(
+        store=store,
         name=name,
         category=category,
         supplier=supplier,
-        purchase_price=Decimal(purchase_price),
-        selling_price=Decimal(selling_price),
+        selling_price=selling_price_val,
         stock_quantity=stock_quantity,
         low_stock_threshold=low_stock_threshold,
         condition=condition,
@@ -126,7 +156,7 @@ def make_client(first_name='Jean', last_name='Dupont', phone='+229 97 11 22 33')
 
 # ── VENTES ───────────────────────────────────────────────────────
 
-def make_sale(user, client=None, items=None, payment_method='cash', discount=0):
+def make_sale(user, client=None, items=None, payment_method='cash'):
     """
     Crée une vente AVEC ses SaleItems (les signals gèrent le stock).
     items = [{'product': p, 'quantity': 2, 'unit_price': 15000}, ...]
@@ -139,31 +169,27 @@ def make_sale(user, client=None, items=None, payment_method='cash', discount=0):
         items = [{'product': product, 'quantity': 1, 'unit_price': product.selling_price}]
 
     subtotal = sum(Decimal(str(i['unit_price'])) * i['quantity'] for i in items)
-    discount  = Decimal(str(discount))
-    total     = subtotal - discount
 
     sale = Sale.objects.create(
         client=client,
         subtotal=subtotal,
-        discount=discount,
         tax_amount=Decimal('0'),
-        total_amount=total,
+        total_amount=subtotal,
         payment_method=payment_method,
-        amount_paid=total,
+        amount_paid=subtotal,
         change_given=Decimal('0'),
         created_by=user,
     )
     for item in items:
         product = item['product']
         qty     = item['quantity']
-        price   = Decimal(str(item['unit_price']))
+        price   = Decimal(str(item['unit_price'])) if item.get('unit_price') is not None else Decimal('0')
         SaleItem.objects.create(
             sale=sale,
             product=product,
-            product_name=product.name,
+            product_name=product.name if product else item.get('product_name', 'Produit Supprimé'),
             quantity=qty,
             unit_price=price,
-            purchase_price=product.purchase_price,
             subtotal=price * qty,
         )
     return sale
@@ -171,13 +197,12 @@ def make_sale(user, client=None, items=None, payment_method='cash', discount=0):
 
 # ── RÉAPPRO ──────────────────────────────────────────────────────
 
-def make_restock(user, product, quantity=10, unit_cost=8000):
+def make_restock(user, product, quantity=10, **kwargs):
     from apps.sales.models import Restock, RestockItem
     restock = Restock.objects.create(created_by=user)
     RestockItem.objects.create(
         restock=restock,
         product=product,
         quantity=quantity,
-        unit_cost=Decimal(str(unit_cost)),
     )
     return restock

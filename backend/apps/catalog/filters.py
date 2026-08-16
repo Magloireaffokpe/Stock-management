@@ -3,11 +3,11 @@ from .models import Product
 
 
 class ProductFilter(django_filters.FilterSet):
+    store         = django_filters.NumberFilter(field_name='store__id')
     min_price     = django_filters.NumberFilter(field_name='selling_price', lookup_expr='gte')
     max_price     = django_filters.NumberFilter(field_name='selling_price', lookup_expr='lte')
     stock_status  = django_filters.CharFilter(method='filter_stock_status')
     category      = django_filters.NumberFilter(field_name='category__id')
-    subcategory   = django_filters.NumberFilter(field_name='subcategory__id')
     supplier      = django_filters.NumberFilter(field_name='supplier__id')
     condition     = django_filters.CharFilter(field_name='condition')
     is_active     = django_filters.BooleanFilter(field_name='is_active')
@@ -16,7 +16,7 @@ class ProductFilter(django_filters.FilterSet):
 
     class Meta:
         model = Product
-        fields = ['category', 'subcategory', 'supplier', 'condition', 'is_active', 'is_featured']
+        fields = ['store', 'category', 'supplier', 'condition', 'is_active', 'is_featured']
 
     def filter_stock_status(self, queryset, name, value):
         """

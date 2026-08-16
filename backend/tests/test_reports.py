@@ -6,13 +6,14 @@ Couvre : Dashboard KPIs, graphiques (daily/monthly/catégories),
 
 from datetime import date, timedelta
 from decimal import Decimal
+import io
 
 from django.utils import timezone
 from rest_framework import status
 
 from apps.sales.models import Sale, SaleItem
 from .base import BaseTestCase
-from .factories import make_product, make_client, make_sale, make_category
+from .factories import make_product, make_client, make_sale, make_category, make_store
 
 # ═══════════════════════════════════════════════════════════════════
 #  TESTS INTÉGRATION — Dashboard KPIs
@@ -43,7 +44,6 @@ class DashboardKPITest(BaseTestCase):
         # Vérifier les champs dans 'today'
         for champ in [
             "revenue",
-            "profit",
             "count",
             "variation_revenue",
             "variation_count",
@@ -103,16 +103,6 @@ class DashboardKPITest(BaseTestCase):
         self.assertGreaterEqual(stock_data["critical"], 1)
         self.assertGreaterEqual(stock_data["low"], 1)
         self.assertGreaterEqual(stock_data["total_products"], 4)
-
-    def test_kpi_today_profit_calculé(self):
-        """profit = (prix_vente - prix_achat) × quantité"""
-        p = make_product(purchase_price=30000, selling_price=50000, stock_quantity=10)
-        make_sale(
-            self.admin, items=[{"product": p, "quantity": 2, "unit_price": 50000}]
-        )
-
-        r = self.admin_client.get("/api/reports/dashboard/")
-        self.assertGreaterEqual(r.data["today"]["profit"], 40000)  # (50k-30k)×2
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -203,39 +193,6 @@ class CategorySalesChartTest(BaseTestCase):
         self.assertIn("Cat Chart Test", noms)
 
 
-class PaymentMethodStatsTest(BaseTestCase):
-
-    def test_accessible_aux_utilisateurs_authentifiés(self):
-        r_emp = self.employee_client.get("/api/reports/charts/payment-methods/")
-        self.assertEqual(r_emp.status_code, status.HTTP_200_OK)
-
-        r_admin = self.admin_client.get("/api/reports/charts/payment-methods/")
-        self.assertEqual(r_admin.status_code, status.HTTP_200_OK)
-
-    def test_méthodes_paiement_représentées(self):
-        p1 = make_product(name="Cash P", stock_quantity=10)
-        p2 = make_product(name="MTN P", stock_quantity=10)
-        make_sale(
-            self.admin,
-            items=[{"product": p1, "quantity": 1, "unit_price": 10000}],
-            payment_method="cash",
-        )
-        make_sale(
-            self.admin,
-            items=[{"product": p2, "quantity": 1, "unit_price": 10000}],
-            payment_method="mtn",
-        )
-        r = self.admin_client.get("/api/reports/charts/payment-methods/")
-        methods = [e["payment_method"] for e in r.data]
-        self.assertIn("cash", methods)
-        self.assertIn("mtn", methods)
-
-
-# ═══════════════════════════════════════════════════════════════════
-#  TESTS INTÉGRATION — Top produits & Valeur stock
-# ═══════════════════════════════════════════════════════════════════
-
-
 class TopProductsTest(BaseTestCase):
 
     def test_accessible_aux_utilisateurs_authentifiés(self):
@@ -273,41 +230,6 @@ class TopProductsTest(BaseTestCase):
             )
         r = self.admin_client.get("/api/reports/top-products/?limit=5")
         self.assertLessEqual(len(r.data), 5)
-
-
-class StockValueTest(BaseTestCase):
-
-    def test_accessible_aux_utilisateurs_authentifiés(self):
-        r_emp = self.employee_client.get("/api/reports/stock-value/")
-        self.assertEqual(r_emp.status_code, status.HTTP_200_OK)
-
-        r_admin = self.admin_client.get("/api/reports/stock-value/")
-        self.assertEqual(r_admin.status_code, status.HTTP_200_OK)
-
-    def test_structure_réponse(self):
-        r = self.admin_client.get("/api/reports/stock-value/")
-        for champ in [
-            "purchase_value",
-            "selling_value",
-            "total_products",
-            "total_units",
-            "potential_profit",
-        ]:
-            self.assertIn(champ, r.data)
-
-    def test_valeur_stock_cohérente(self):
-        make_product(purchase_price=10000, selling_price=15000, stock_quantity=5)
-        r = self.admin_client.get("/api/reports/stock-value/")
-        self.assertGreaterEqual(r.data["purchase_value"], 50000)
-        self.assertGreaterEqual(r.data["selling_value"], 75000)
-        self.assertGreater(r.data["potential_profit"], 0)
-
-    def test_potential_profit_égal_différence(self):
-        r = self.admin_client.get("/api/reports/stock-value/")
-        diff = Decimal(str(r.data["selling_value"])) - Decimal(
-            str(r.data["purchase_value"])
-        )
-        self.assertEqual(diff, Decimal(str(r.data["potential_profit"])))
 
 
 class RecentSalesTest(BaseTestCase):
@@ -424,6 +346,128 @@ class ExcelExportTest(BaseTestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK)
 
+    def test_export_ventes_contient_les_produits_vendus(self):
+        from openpyxl import load_workbook
+
+        p = make_product(name="Produit Export Visible", stock_quantity=10)
+        make_sale(
+            self.admin,
+            items=[{"product": p, "quantity": 3, "unit_price": 5000}],
+        )
+        r = self.admin_client.get("/api/reports/export/sales/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+        wb = load_workbook(io.BytesIO(r.content))
+        self.assertEqual(len(wb.sheetnames), 1)
+        ws = wb.active
+        products = [row[3].value for row in ws.iter_rows(min_row=2)]
+        self.assertIn("Produit Export Visible", products)
+        quantities = [row[4].value for row in ws.iter_rows(min_row=2)]
+        self.assertIn(3, quantities)
+
     def test_export_non_accessible_sans_auth(self):
         r = self.client.get("/api/reports/export/sales/")
         self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class StoreFilteredReportsTest(BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.store1 = make_store(name='Boutique Alpha')
+        self.store2 = make_store(name='Boutique Beta')
+
+        self.cat1 = make_category(store=self.store1, name="Boutique 1 Root")
+        self.cat2 = make_category(store=self.store2, name="Boutique 2 Root")
+
+        self.p1 = make_product(category=self.cat1, store=self.store1, selling_price=10000, stock_quantity=10)
+        self.p2 = make_product(category=self.cat2, store=self.store2, selling_price=20000, stock_quantity=5)
+
+        # Create a sale for store 1
+        make_sale(
+            self.admin,
+            items=[{"product": self.p1, "quantity": 1, "unit_price": 10000}],
+            payment_method="cash"
+        )
+        # Create a sale for store 2
+        make_sale(
+            self.admin,
+            items=[{"product": self.p2, "quantity": 1, "unit_price": 20000}],
+            payment_method="mtn"
+        )
+
+    def test_dashboard_kpi_with_store_filter(self):
+        # Without filter (Global)
+        r_global = self.admin_client.get("/api/reports/dashboard/")
+        self.assertEqual(r_global.data["today"]["revenue"], 30000)
+        self.assertEqual(r_global.data["stock"]["total_products"], 2)
+
+        # Filtered by store 1
+        r_store1 = self.admin_client.get(f"/api/reports/dashboard/?store={self.store1.pk}")
+        self.assertEqual(r_store1.data["today"]["revenue"], 10000)
+        self.assertEqual(r_store1.data["stock"]["total_products"], 1)
+
+    def test_daily_sales_chart_with_store_filter(self):
+        today_str = date.today().isoformat()
+
+        # Filtered by store 2
+        r = self.admin_client.get(f"/api/reports/charts/daily/?store={self.store2.pk}&days=1")
+        entry = next(d for d in r.data if d["date"] == today_str)
+        self.assertEqual(entry["revenue"], 20000)
+
+    def test_monthly_sales_chart_with_store_filter(self):
+        r = self.admin_client.get(f"/api/reports/charts/monthly/?store={self.store1.pk}")
+        self.assertEqual(r.data[0]["revenue"], 10000)
+
+    def test_top_products_with_store_filter(self):
+        r = self.admin_client.get(f"/api/reports/top-products/?store={self.store2.pk}")
+        self.assertEqual(len(r.data), 1)
+        self.assertEqual(r.data[0]["product__name"], self.p2.name)
+
+    def test_category_sales_with_store_filter(self):
+        r = self.admin_client.get(f"/api/reports/charts/categories/?store={self.store1.pk}")
+        self.assertEqual(len(r.data), 1)
+        self.assertEqual(r.data[0]["product__category__name"], self.cat1.name)
+
+    def test_recent_sales_with_store_filter(self):
+        r = self.admin_client.get(f"/api/reports/dashboard/recent-sales/?store={self.store1.pk}")
+        self.assertEqual(len(r.data), 1)
+        # SaleListSerializer is lightweight — verify by total_amount
+        self.assertEqual(int(r.data[0]["total_amount"]), 10000)
+
+    def test_excel_export_products_with_store_filter(self):
+        # Store 1
+        r1 = self.admin_client.get(f"/api/reports/export/products/?store={self.store1.pk}")
+        self.assertEqual(r1.status_code, status.HTTP_200_OK)
+
+        # Global
+        r2 = self.admin_client.get("/api/reports/export/products/")
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+
+    def test_excel_export_sales_with_store_filter(self):
+        r1 = self.admin_client.get(f"/api/reports/export/sales/?store={self.store1.pk}")
+        self.assertEqual(r1.status_code, status.HTTP_200_OK)
+        self.assertIn("spreadsheetml", r1.get("Content-Type", ""))
+        # Le nom de fichier doit contenir la boutique
+        self.assertIn("boutique-alpha", r1["Content-Disposition"])
+
+    def test_excel_export_movements_with_store_filter(self):
+        from apps.stock.models import StockMovement
+        for store, prod in [(self.store1, self.p1), (self.store2, self.p2)]:
+            StockMovement.objects.create(
+                product=prod,
+                movement_type="initial",
+                quantity=5,
+                stock_before=0,
+                stock_after=5,
+            )
+        r1 = self.admin_client.get(f"/api/reports/export/movements/?store={self.store2.pk}")
+        self.assertEqual(r1.status_code, status.HTTP_200_OK)
+        self.assertIn("spreadsheetml", r1.get("Content-Type", ""))
+        self.assertIn("boutique-beta", r1["Content-Disposition"])
+
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(r1.content))
+        ws = wb.active
+        names = [row[1].value for row in ws.iter_rows(min_row=2)]
+        self.assertIn(self.p2.name, names)
+        self.assertNotIn(self.p1.name, names)

@@ -9,19 +9,13 @@ import {
   ReceiptText,
   X,
   Check,
-  Percent,
-  ChevronDown,
 } from "lucide-react";
-import { catalogAPI, salesAPI, reportsAPI, formatCurrency } from "../../api";
+import { catalogAPI, salesAPI, reportsAPI, storesAPI, formatCurrency } from "../../api";
 import useSettingsStore from "../../store/settingsStore";
-import useAuthStore from "../../store/authStore";
 import toast from "react-hot-toast";
-
-const PAYMENT_METHODS = [{ value: "cash", label: "Espèces" }];
 
 export default function POSPage() {
   const currency = useSettingsStore((s) => s.settings?.currency || "FCFA");
-  const isAdmin = useAuthStore((s) => s.isAdmin());
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [products, setProducts] = useState([]);
@@ -29,12 +23,12 @@ export default function POSPage() {
   const [cart, setCart] = useState([]);
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [payment, setPayment] = useState("cash");
-  const [discount, setDiscount] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(null);
   const [catFilter, setCatFilter] = useState("all");
+  const [storeFilter, setStoreFilter] = useState("all");
   const [categories, setCategories] = useState([]);
+  const [stores, setStores] = useState([]);
   const searchRef = useRef();
 
   // Debounce de la recherche
@@ -51,20 +45,22 @@ export default function POSPage() {
       catalogAPI.products({ page_size: 20, is_active: true, min_stock: 1 }), // Exclure produits inactifs et en rupture
       salesAPI.clients({ page_size: 200 }),
       catalogAPI.categories({ active_only: true }),
+      storesAPI.list(),
     ])
-      .then(([pRes, cRes, catRes]) => {
+      .then(([pRes, cRes, catRes, sRes]) => {
         const prods = pRes.data?.results ?? pRes.data ?? [];
         setAllProducts(prods);
         setProducts(prods);
         setClients(cRes.data?.results ?? cRes.data ?? []);
         setCategories(catRes.data?.results ?? catRes.data ?? []);
+        setStores(sRes.data?.results ?? sRes.data ?? []);
       })
       .catch(() => toast.error("Erreur chargement des produits"));
   }, []);
 
   // Recherche via API quand les filtres changent
   useEffect(() => {
-    if (!debouncedQuery.trim() && catFilter === "all") {
+    if (!debouncedQuery.trim() && catFilter === "all" && storeFilter === "all") {
       setProducts(allProducts); // Restaure les produits initiaux
       return;
     }
@@ -77,6 +73,7 @@ export default function POSPage() {
           min_stock: 1,
           ...(debouncedQuery && { search: debouncedQuery }),
           ...(catFilter !== "all" && { category: catFilter }),
+          ...(storeFilter !== "all" && { store: storeFilter }),
         });
         setProducts(res.data?.results ?? res.data ?? []);
       } catch (e) {
@@ -84,7 +81,7 @@ export default function POSPage() {
       }
     };
     search();
-  }, [debouncedQuery, catFilter, allProducts]);
+  }, [debouncedQuery, catFilter, storeFilter, allProducts]);
 
   const addToCart = (product) => {
     if (product.stock_quantity <= 0) return;
@@ -101,7 +98,7 @@ export default function POSPage() {
       }
       return [
         ...prev,
-        { product, quantity: 1, unit_price: parseFloat(product.selling_price) },
+        { product, quantity: 1, unit_price: product.selling_price ? parseFloat(product.selling_price) : '' },
       ];
     });
   };
@@ -128,7 +125,7 @@ export default function POSPage() {
     setCart((prev) =>
       prev.map((i) =>
         i.product.id === productId
-          ? { ...i, unit_price: parseFloat(price) || 0 }
+          ? { ...i, unit_price: price === '' ? '' : (parseFloat(price) || 0) }
           : i,
       ),
     );
@@ -138,13 +135,17 @@ export default function POSPage() {
     setCart((prev) => prev.filter((i) => i.product.id !== productId));
   };
 
-  const subtotal = cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
-  const discountAmt = parseFloat(discount) || 0;
-  const total = Math.max(0, subtotal - discountAmt);
+  const subtotal = cart.reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * i.quantity, 0);
+  const total = subtotal;
 
   const handleSale = async () => {
     if (cart.length === 0) {
       toast.error("Panier vide");
+      return;
+    }
+    const hasEmptyPrice = cart.some(i => i.unit_price === '' || isNaN(i.unit_price) || i.unit_price === null);
+    if (hasEmptyPrice) {
+      toast.error("Veuillez saisir un prix valide pour tous les articles");
       return;
     }
     setLoading(true);
@@ -156,15 +157,13 @@ export default function POSPage() {
           quantity: i.quantity,
           unit_price: i.unit_price,
         })),
-        payment_method: payment,
+        payment_method: "cash",
         amount_paid: total,
-        discount: discountAmt,
       });
       const sale = res.data;
       setShowSuccess(sale);
       setCart([]);
       setSelectedClient(null);
-      setDiscount("");
       // Rafraîchir les stocks dans la liste produits initiale
       const updated = await catalogAPI.products({
         page_size: 20,
@@ -235,6 +234,19 @@ export default function POSPage() {
             </option>
           ))}
         </select>
+        <select
+          className="input"
+          style={{ width: "auto", minWidth: 160 }}
+          value={storeFilter}
+          onChange={(e) => setStoreFilter(e.target.value)}
+        >
+          <option value="all">Toutes les boutiques</option>
+          {stores.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
         <div
           style={{
             marginLeft: "auto",
@@ -284,10 +296,15 @@ export default function POSPage() {
                       background: p.category_color || "var(--blue-400)",
                     }}
                   />
+                  {p.store_name && (
+                    <div style={{ position: 'absolute', top: 6, left: 6, fontSize: '0.6rem', padding: '2px 6px', background: 'var(--bg-hover)', borderRadius: 4, color: 'var(--text-secondary)' }}>
+                      {p.store_name}
+                    </div>
+                  )}
 
-                  <div className="pos-product-name">{p.name}</div>
+                  <div className="pos-product-name" style={{ marginTop: p.store_name ? 10 : 0 }}>{p.name}</div>
                   <div className="pos-product-price">
-                    {formatCurrency(p.selling_price, currency)}
+                    {p.selling_price ? formatCurrency(p.selling_price, currency) : 'Prix à saisir'}
                   </div>
                   <div
                     className={`pos-product-stock stock-dot ${p.stock_status}`}
@@ -344,8 +361,16 @@ export default function POSPage() {
               cart.map((item) => (
                 <div key={item.product.id} className="cart-item">
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="cart-item-name">{item.product.name}</div>
-                    {/* Prix — modifiable admin seulement */}
+                    <div className="cart-item-name">
+                      {item.product.name}
+                      {item.product.store_name && (
+                        <span style={{ marginLeft: 6, fontSize: '0.6rem', padding: '1px 4px', background: 'var(--bg-hover)', borderRadius: 4, color: 'var(--text-secondary)', display: 'inline-block' }}>
+                          <User size={8} style={{ display: 'none' }}/> {/* Dummy just to import something or use badge */}
+                          {item.product.store_name}
+                        </span>
+                      )}
+                    </div>
+                    {/* Prix — modifiable pour TOUS */}
                     <div
                       style={{
                         display: "flex",
@@ -354,36 +379,24 @@ export default function POSPage() {
                         marginTop: 3,
                       }}
                     >
-                      {isAdmin ? (
-                        <input
-                          type="number"
-                          value={item.unit_price}
-                          onChange={(e) =>
-                            updatePrice(item.product.id, e.target.value)
-                          }
-                          style={{
-                            width: 90,
-                            padding: "2px 6px",
-                            border: "1px solid var(--border)",
-                            borderRadius: 5,
-                            fontSize: "0.75rem",
-                            fontFamily: "var(--font-mono)",
-                            background: "var(--bg-input)",
-                          }}
-                          min={0}
-                        />
-                      ) : (
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            fontFamily: "var(--font-mono)",
-                            color: "var(--text-secondary)",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {formatCurrency(item.unit_price, currency)}
-                        </span>
-                      )}
+                      <input
+                        type="number"
+                        value={item.unit_price}
+                        onChange={(e) =>
+                          updatePrice(item.product.id, e.target.value)
+                        }
+                        style={{
+                          width: 90,
+                          padding: "2px 6px",
+                          border: "1px solid var(--border)",
+                          borderRadius: 5,
+                          fontSize: "0.75rem",
+                          fontFamily: "var(--font-mono)",
+                          background: "var(--bg-input)",
+                        }}
+                        min={0}
+                        placeholder="Prix"
+                      />
                       <span
                         style={{
                           fontSize: "0.68rem",
@@ -419,7 +432,7 @@ export default function POSPage() {
                     </button>
                   </div>
                   <div className="cart-item-price">
-                    {formatCurrency(item.unit_price * item.quantity, currency)}
+                    {formatCurrency((parseFloat(item.unit_price) || 0) * item.quantity, currency)}
                   </div>
                   <button
                     className="btn btn-ghost btn-icon"
@@ -465,39 +478,6 @@ export default function POSPage() {
               </span>
             </div>
 
-            {/* Remise — admins seulement */}
-            {isAdmin && (
-              <div className="pos-total-row">
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <Percent size={13} /> Remise
-                </span>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <input
-                    type="number"
-                    value={discount}
-                    onChange={(e) => setDiscount(e.target.value)}
-                    placeholder="0"
-                    min={0}
-                    style={{
-                      width: 80,
-                      padding: "3px 8px",
-                      border: "1px solid var(--border)",
-                      borderRadius: 5,
-                      fontSize: "0.78rem",
-                      fontFamily: "var(--font-mono)",
-                      textAlign: "right",
-                      background: "var(--bg-input)",
-                    }}
-                  />
-                  <span
-                    style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}
-                  >
-                    {currency}
-                  </span>
-                </div>
-              </div>
-            )}
-
             <div className="divider" style={{ margin: "8px 0" }} />
 
             <div className="pos-total-row" style={{ marginBottom: 10 }}>
@@ -509,32 +489,6 @@ export default function POSPage() {
               <span className="pos-grand-total">
                 {formatCurrency(total, currency)}
               </span>
-            </div>
-
-            {/* Paiement */}
-            <div style={{ marginBottom: 10 }}>
-              <div
-                style={{
-                  fontSize: "0.72rem",
-                  color: "var(--text-muted)",
-                  marginBottom: 6,
-                }}
-              >
-                Paiement
-              </div>
-              <div
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--border)",
-                  background: "var(--bg-soft)",
-                  fontSize: "0.8rem",
-                  fontWeight: 600,
-                  color: "var(--text-secondary)",
-                }}
-              >
-                {PAYMENT_METHODS[0].label}
-              </div>
             </div>
 
             {/* Bouton valider */}

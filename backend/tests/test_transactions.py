@@ -43,8 +43,8 @@ class TransactionsAndCalculationsTest(BaseTestCase):
 
     def test_sale_tax_and_totals_calculation(self):
         """
-        Vérifie que le calcul de la TVA s'applique bien sur le (Sous-total - Remise)
-        et que le total général est correct.
+        Vérifie que le calcul de la TVA s'applique bien sur le sous-total
+        (prix de vente effectif) et que le total général est correct.
         """
         # Configuration des taxes
         store = StoreSettings.get()
@@ -57,8 +57,7 @@ class TransactionsAndCalculationsTest(BaseTestCase):
         url = reverse('sale-create')
         data = {
             "payment_method": "cash",
-            "discount": 500,
-            "amount_paid": 2950,
+            "amount_paid": 3540,
             "items": [
                 {"product_id": product_a.id, "quantity": 1, "unit_price": 1000},
                 {"product_id": product_b.id, "quantity": 1, "unit_price": 2000},
@@ -71,10 +70,9 @@ class TransactionsAndCalculationsTest(BaseTestCase):
         sale = Sale.objects.get(id=response.data['id'])
         
         self.assertEqual(sale.subtotal, Decimal('3000.0'))
-        self.assertEqual(sale.discount, Decimal('500.0'))
-        # Base taxable = 3000 - 500 = 2500, 18% de 2500 = 450
-        self.assertEqual(sale.tax_amount, Decimal('450.0'))
-        self.assertEqual(sale.total_amount, Decimal('2950.0'))
+        # Base taxable = 3000, 18% de 3000 = 540
+        self.assertEqual(sale.tax_amount, Decimal('540.0'))
+        self.assertEqual(sale.total_amount, Decimal('3540.0'))
         self.assertEqual(sale.change_given, Decimal('0.0'))
 
 

@@ -37,7 +37,7 @@ const useAuthStore = create((set, get) => ({
 
   isAdmin: () => {
     const u = get().user
-    return u?.role === 'admin' || u?.is_superuser
+    return u?.is_staff || u?.is_superuser || u?.role === 'admin'
   },
 }))
 

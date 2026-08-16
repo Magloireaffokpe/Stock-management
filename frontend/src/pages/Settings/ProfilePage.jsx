@@ -13,6 +13,7 @@ export default function ProfilePage() {
     first_name: user?.first_name || '',
     last_name:  user?.last_name  || '',
     email:      user?.email      || '',
+    phone:      user?.phone      || '',
   })
   const [savingInfo, setSavingInfo] = useState(false)
 
@@ -95,6 +96,11 @@ export default function ProfilePage() {
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 12 }}>
               @{user?.username}
             </div>
+            {user?.phone && (
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 12 }}>
+                {user.phone}
+              </div>
+            )}
             <span className={`badge ${user?.role === 'admin' ? 'badge-orange' : 'badge-blue'}`}>
               {user?.role === 'admin' ? '⭐ Administrateur' : 'Employé'}
             </span>
@@ -144,11 +150,17 @@ export default function ProfilePage() {
                       onChange={e => setInfo('last_name', e.target.value)}
                       placeholder="Votre nom" />
                   </div>
-                  <div className="input-group" style={{ gridColumn: '1/-1' }}>
+                  <div className="input-group">
                     <label className="input-label">Adresse e-mail</label>
                     <input className="input" type="email" value={infoForm.email}
                       onChange={e => setInfo('email', e.target.value)}
                       placeholder="votre@email.com" />
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Téléphone</label>
+                    <input className="input" type="tel" value={infoForm.phone}
+                      onChange={e => setInfo('phone', e.target.value)}
+                      placeholder="+229 00 00 00 00" />
                   </div>
                 </div>
 

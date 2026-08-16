@@ -3,6 +3,7 @@ Tests — app sales
 Couvre : Modèles (numérotation, calculs), Signals (décrément/restauration/réappro),
          API ventes, API dévis, API réappro, Clients
 """
+import unittest
 from decimal import Decimal
 from datetime import timedelta
 
@@ -14,7 +15,7 @@ from apps.catalog.models import Product
 from apps.sales.models import Sale, SaleItem, Client, Restock, RestockItem, Quotation
 from apps.stock.models import StockMovement, StockAlert
 from .base import BaseTestCase
-from .factories import make_product, make_client, make_sale, make_restock, make_supplier
+from .factories import make_product, make_client, make_sale, make_restock, make_supplier, make_store, make_category
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -191,11 +192,9 @@ class RestockSignalTest(BaseTestCase):
         make_restock(self.admin, product=p, quantity=8)
         self.assertMovementExists(p, 'restock', 8)
 
+    @unittest.skip("Coût d'achat supprimé de Product et RestockItem (spec : plus de prix d'achat)")
     def test_réappro_met_à_jour_prix_achat(self):
-        p = make_product(purchase_price=10000, stock_quantity=5)
-        make_restock(self.admin, product=p, quantity=5, unit_cost=12000)
-        p.refresh_from_db()
-        self.assertEqual(p.purchase_price, Decimal('12000'))
+        pass
 
     def test_réappro_résout_alertes_existantes(self):
         from apps.stock.utils import check_and_create_alert
@@ -222,12 +221,28 @@ class SaleCreateAPITest(BaseTestCase):
             'items': [{'product_id': p.pk, 'quantity': 2, 'unit_price': 50000}],
             'payment_method': 'cash',
             'amount_paid': 100000,
-            'discount': 0,
         }, format='json')
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
         self.assertIn('invoice_number', r.data)
         self.assertEqual(len(r.data['items']), 1)
         self.assertStockEquals(p, 8)
+
+    def test_employé_peut_modifier_prix_librement_au_pos(self):
+        """L'employé peut vendre à un prix différent du prix de référence"""
+        p = make_product(stock_quantity=10, selling_price=50000)
+        r = self.employee_client.post('/api/sales/sales/create/', {
+            'items': [{'product_id': p.pk, 'quantity': 2, 'unit_price': 45000}],
+            'payment_method': 'cash',
+            'amount_paid': 90000,
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Decimal(r.data['total_amount']), Decimal('90000'))
+        item = r.data['items'][0]
+        self.assertEqual(Decimal(item['unit_price']), Decimal('45000'))
+        self.assertEqual(Decimal(item['subtotal']), Decimal('90000'))
+        # Le prix négocié est bien persisté en base
+        sale_item = SaleItem.objects.get(pk=item['id'])
+        self.assertEqual(sale_item.unit_price, Decimal('45000'))
 
     def test_créer_vente_avec_client(self):
         client = make_client(first_name='Ali', last_name='Moussa')
@@ -240,18 +255,6 @@ class SaleCreateAPITest(BaseTestCase):
         }, format='json')
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
         self.assertEqual(r.data['client'], client.pk)
-
-    def test_créer_vente_avec_remise(self):
-        p = make_product(stock_quantity=10, selling_price=50000)
-        r = self.admin_client.post('/api/sales/sales/create/', {
-            'items': [{'product_id': p.pk, 'quantity': 1, 'unit_price': 50000}],
-            'payment_method': 'cash',
-            'amount_paid': 45000,
-            'discount': 5000,
-        }, format='json')
-        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Decimal(r.data['discount']), Decimal('5000'))
-        self.assertEqual(Decimal(r.data['total_amount']), Decimal('45000'))
 
     def test_créer_vente_calcule_monnaie_rendue(self):
         p = make_product(stock_quantity=10, selling_price=40000)
@@ -290,24 +293,9 @@ class SaleCreateAPITest(BaseTestCase):
         }, format='json')
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
 
+    @unittest.skip("Coût d'achat supprimé de SaleItem (spec : plus de prix d'achat)")
     def test_vente_enregistre_prix_achat_snapshot(self):
-        """Le purchase_price dans SaleItem doit être figé au moment de la vente"""
-        p = make_product(purchase_price=10000, selling_price=15000, stock_quantity=10)
-        sale_r = self.admin_client.post('/api/sales/sales/create/', {
-            'items': [{'product_id': p.pk, 'quantity': 1, 'unit_price': 15000}],
-            'payment_method': 'cash',
-            'amount_paid': 15000,
-        }, format='json')
-        self.assertEqual(sale_r.status_code, status.HTTP_201_CREATED)
-        sale = Sale.objects.get(pk=sale_r.data['id'])
-        item = sale.items.first()
-        self.assertEqual(item.purchase_price, Decimal('10000'))
-
-        # Changer le prix du produit : ne doit pas affecter l'ancienne vente
-        p.purchase_price = Decimal('99999')
-        p.save()
-        item.refresh_from_db()
-        self.assertEqual(item.purchase_price, Decimal('10000'))
+        pass
 
     def test_sans_auth_retourne_401(self):
         r = self.client.post('/api/sales/sales/create/', {
@@ -330,7 +318,7 @@ class SaleListAPITest(BaseTestCase):
         s_cancel = Sale.objects.create(
             subtotal=0, total_amount=0, amount_paid=0, change_given=0,
             created_by=self.admin, is_cancelled=True,
-            payment_method='cash', discount=0, tax_amount=0,
+            payment_method='cash', tax_amount=0,
         )
         r = self.admin_client.get('/api/sales/sales/?is_cancelled=False')
         ids = [s['id'] for s in r.data['results']]
@@ -393,13 +381,9 @@ class SaleDetailAPITest(BaseTestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertEqual(len(r.data['items']), 2)
 
+    @unittest.skip("Marge/coût d'achat supprimés définitivement (spec : plus de prix d'achat)")
     def test_détail_contient_total_marge(self):
-        p = make_product(purchase_price=10000, selling_price=15000, stock_quantity=10)
-        sale = make_sale(self.admin, items=[{'product': p, 'quantity': 2, 'unit_price': 15000}])
-        r = self.admin_client.get(f'/api/sales/sales/{sale.pk}/')
-        self.assertIn('total_margin', r.data)
-        # Marge = (15000 - 10000) × 2 = 10000
-        self.assertEqual(Decimal(str(r.data['total_margin'])), Decimal('10000'))
+        pass
 
     def test_employe_ne_peut_pas_ouvrir_une_vente_hors_de_sa_fenetre(self):
         product = make_product(stock_quantity=10)
@@ -424,7 +408,7 @@ class RestockAPITest(BaseTestCase):
     def test_créer_réappro_incrémente_stock(self):
         p = make_product(stock_quantity=5)
         r = self.admin_client.post('/api/sales/restocks/create/', {
-            'items': [{'product_id': p.pk, 'quantity': 15, 'unit_cost': 9000}],
+            'items': [{'product_id': p.pk, 'quantity': 15}],
         }, format='json')
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
         self.assertStockEquals(p, 20)
@@ -434,7 +418,7 @@ class RestockAPITest(BaseTestCase):
         p = make_product(stock_quantity=0)
         r = self.admin_client.post('/api/sales/restocks/create/', {
             'supplier_id': sup.pk,
-            'items': [{'product_id': p.pk, 'quantity': 10, 'unit_cost': 8000}],
+            'items': [{'product_id': p.pk, 'quantity': 10}],
             'notes': 'Commande urgente',
         }, format='json')
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
@@ -443,38 +427,165 @@ class RestockAPITest(BaseTestCase):
     def test_réappro_génère_référence(self):
         p = make_product(stock_quantity=0)
         r = self.admin_client.post('/api/sales/restocks/create/', {
-            'items': [{'product_id': p.pk, 'quantity': 5, 'unit_cost': 10000}],
+            'items': [{'product_id': p.pk, 'quantity': 5}],
         }, format='json')
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
         self.assertIsNotNone(r.data['reference'])
         self.assertTrue(r.data['reference'].startswith('REAP-'))
 
+    @unittest.skip("Coût total supprimé du réappro (spec : plus de prix d'achat)")
     def test_réappro_calcule_coût_total(self):
-        p1 = make_product(name='RT1', stock_quantity=0)
-        p2 = make_product(name='RT2', stock_quantity=0)
-        r = self.admin_client.post('/api/sales/restocks/create/', {
-            'items': [
-                {'product_id': p1.pk, 'quantity': 10, 'unit_cost': 5000},
-                {'product_id': p2.pk, 'quantity': 5,  'unit_cost': 8000},
-            ],
-        }, format='json')
-        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
-        # Total = 10×5000 + 5×8000 = 90000
-        self.assertEqual(Decimal(str(r.data['total_cost'])), Decimal('90000'))
+        pass
 
     def test_réappro_réservé_admin(self):
         p = make_product(stock_quantity=0)
         r = self.employee_client.post('/api/sales/restocks/create/', {
-            'items': [{'product_id': p.pk, 'quantity': 5, 'unit_cost': 10000}],
+            'items': [{'product_id': p.pk, 'quantity': 5}],
         }, format='json')
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
         self.assertStockEquals(p, 0)
 
     def test_réappro_produit_inexistant_retourne_400(self):
         r = self.admin_client.post('/api/sales/restocks/create/', {
-            'items': [{'product_id': 99999, 'quantity': 5, 'unit_cost': 10000}],
+            'items': [{'product_id': 99999, 'quantity': 5}],
         }, format='json')
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class RestockUpdateAPITest(BaseTestCase):
+    """PATCH /api/sales/restocks/<id>/ — modification atomique"""
+
+    def _create(self, items):
+        return self.admin_client.post('/api/sales/restocks/create/', {
+            'items': items,
+        }, format='json')
+
+    def test_modifier_quantité_ajuste_le_stock(self):
+        p = make_product(name='Upd Qty', stock_quantity=5)
+        r = self._create([{'product_id': p.pk, 'quantity': 10}])
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        restock_id = r.data['id']
+        self.assertStockEquals(p, 15)
+
+        # Passer de 10 à 4 → le stock doit baisser de 6
+        r = self.admin_client.patch(f'/api/sales/restocks/{restock_id}/', {
+            'items': [{'product_id': p.pk, 'quantity': 4}],
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertStockEquals(p, 9)
+        self.assertMovementExists(p, 'restock_cancel', -6)
+
+    def test_modifier_ajoute_un_nouveau_produit(self):
+        p1 = make_product(name='Upd P1', stock_quantity=5)
+        p2 = make_product(name='Upd P2', stock_quantity=3)
+        r = self._create([{'product_id': p1.pk, 'quantity': 10}])
+        restock_id = r.data['id']
+        self.assertStockEquals(p1, 15)
+
+        r = self.admin_client.patch(f'/api/sales/restocks/{restock_id}/', {
+            'items': [
+                {'product_id': p1.pk, 'quantity': 5},
+                {'product_id': p2.pk, 'quantity': 7},
+            ],
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertStockEquals(p1, 10)
+        self.assertStockEquals(p2, 10)
+
+    def test_modifier_échoue_atomiquement_si_stock_insuffisant(self):
+        """Une réduction trop forte doit échouer sans rien modifier"""
+        p = make_product(name='Upd Fail', stock_quantity=0)
+        r = self._create([{'product_id': p.pk, 'quantity': 10}])
+        restock_id = r.data['id']
+        self.assertStockEquals(p, 10)
+        p.refresh_from_db()
+
+        # 8 unités vendues → stock à 2
+        make_sale(self.admin, items=[{'product': p, 'quantity': 8, 'unit_price': 10000}])
+        self.assertStockEquals(p, 2)
+
+        # Réduire le réappro de 10 à 1 → stock passerait à -7 → refusé
+        r = self.admin_client.patch(f'/api/sales/restocks/{restock_id}/', {
+            'items': [{'product_id': p.pk, 'quantity': 1}],
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        # Aucun changement
+        self.assertStockEquals(p, 2)
+
+    def test_modifier_met_à_jour_champs_et_items(self):
+        sup = make_supplier(name='Upd Sup')
+        p = make_product(stock_quantity=5)
+        r = self._create([{'product_id': p.pk, 'quantity': 10}])
+        restock_id = r.data['id']
+
+        r = self.admin_client.patch(f'/api/sales/restocks/{restock_id}/', {
+            'supplier_id': sup.pk,
+            'notes': 'Mise à jour test',
+            'items': [{'product_id': p.pk, 'quantity': 12}],
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data['supplier'], sup.pk)
+        self.assertEqual(r.data['notes'], 'Mise à jour test')
+        self.assertEqual(len(r.data['items']), 1)
+        self.assertEqual(r.data['items'][0]['quantity'], 12)
+
+    def test_modifier_réservé_admin(self):
+        p = make_product(stock_quantity=5)
+        r = self._create([{'product_id': p.pk, 'quantity': 10}])
+        restock_id = r.data['id']
+        r = self.employee_client.patch(f'/api/sales/restocks/{restock_id}/', {
+            'items': [{'product_id': p.pk, 'quantity': 1}],
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class RestockDeleteAPITest(BaseTestCase):
+    """DELETE /api/sales/restocks/<id>/ — suppression atomique"""
+
+    def test_supprimer_réappro_restaure_le_stock(self):
+        p = make_product(name='Del Restore', stock_quantity=5)
+        r = self.admin_client.post('/api/sales/restocks/create/', {
+            'items': [{'product_id': p.pk, 'quantity': 10}],
+        }, format='json')
+        restock_id = r.data['id']
+        self.assertStockEquals(p, 15)
+
+        r = self.admin_client.delete(f'/api/sales/restocks/{restock_id}/')
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertStockEquals(p, 5)
+        self.assertMovementExists(p, 'restock_cancel', -10)
+
+    def test_suppression_impossible_si_stock_utilisé(self):
+        """Si le stock réapprovisionné a été vendu, la suppression échoue atomiquement"""
+        p = make_product(name='Del Used', stock_quantity=0)
+        r = self.admin_client.post('/api/sales/restocks/create/', {
+            'items': [{'product_id': p.pk, 'quantity': 10}],
+        }, format='json')
+        restock_id = r.data['id']
+        p.refresh_from_db()
+
+        # Vendre 8 unités
+        make_sale(self.admin, items=[{'product': p, 'quantity': 8, 'unit_price': 10000}])
+        self.assertStockEquals(p, 2)
+
+        # Supprimer le réappro → stock passerait à -8 → refusé
+        r = self.admin_client.delete(f'/api/sales/restocks/{restock_id}/')
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertStockEquals(p, 2)
+
+    def test_suppression_réservée_admin(self):
+        p = make_product(stock_quantity=5)
+        r = self.admin_client.post('/api/sales/restocks/create/', {
+            'items': [{'product_id': p.pk, 'quantity': 10}],
+        }, format='json')
+        restock_id = r.data['id']
+        r = self.employee_client.delete(f'/api/sales/restocks/{restock_id}/')
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertStockEquals(p, 15)  # Inchangé
+
+    def test_réappro_inexistant_retourne_404(self):
+        r = self.admin_client.delete('/api/sales/restocks/99999/')
+        self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -507,3 +618,33 @@ class ClientAPITest(BaseTestCase):
         r = self.admin_client.get(f'/api/sales/clients/{client.pk}/')
         self.assertIn('total_purchases', r.data)
         self.assertIn('purchases_count', r.data)
+
+
+class MultiStoreSaleAPITest(BaseTestCase):
+    def test_sale_with_items_from_different_stores(self):
+        store1 = make_store()
+        store2 = make_store()
+        
+        cat1 = make_category(store=store1)
+        cat2 = make_category(store=store2)
+        
+        p1 = make_product(category=cat1, store=store1, selling_price=10000, stock_quantity=10)
+        p2 = make_product(category=cat2, store=store2, selling_price=20000, stock_quantity=10)
+        
+        r = self.employee_client.post('/api/sales/sales/create/', {
+            'payment_method': 'cash',
+            'amount_paid': 40000,
+            'items': [
+                {'product_id': p1.pk, 'quantity': 2, 'unit_price': 10000},
+                {'product_id': p2.pk, 'quantity': 1, 'unit_price': 20000},
+            ]
+        }, format='json')
+        
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(int(r.data['total_amount']), 40000)
+        
+        # Verify both products had their stock decremented correctly
+        p1.refresh_from_db()
+        p2.refresh_from_db()
+        self.assertEqual(p1.stock_quantity, 8)
+        self.assertEqual(p2.stock_quantity, 9)

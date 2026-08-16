@@ -121,8 +121,7 @@
     {% if invoice.client.address %}<p>{{ invoice.client.address }}</p>{% endif %}
   </div>
   <div class="box">
-    <div class="box-title">Paiement</div>
-    <p><strong>{{ invoice.get_payment_method_display }}</strong></p>
+    <div class="box-title">Montant reçu</div>
     <p>Montant payé : <strong>{{ invoice.amount_paid|floatformat:0 }} {{ store.currency }}</strong></p>
     {% if invoice.change_given > 0 %}
     <p>Monnaie rendue : <strong>{{ invoice.change_given|floatformat:0 }} {{ store.currency }}</strong></p>
@@ -159,12 +158,6 @@
       <td>Sous-total</td>
       <td>{{ invoice.subtotal|floatformat:0 }} {{ store.currency }}</td>
     </tr>
-    {% if invoice.discount > 0 %}
-    <tr>
-      <td>Remise</td>
-      <td>- {{ invoice.discount|floatformat:0 }} {{ store.currency }}</td>
-    </tr>
-    {% endif %}
     {% if invoice.tax_amount > 0 %}
     <tr>
       <td>TVA ({{ store.tax_rate }}%)</td>

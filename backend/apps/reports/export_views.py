@@ -24,13 +24,21 @@ from .exporters import (
 )
 
 
+def _store_label(store_id):
+    if not store_id:
+        return None
+    from apps.stores.models import Store
+    store = Store.objects.filter(id=store_id).first()
+    return store.name if store else None
+
+
 class ExportSalesView(APIView):
     permission_classes = [IsAdminOnly]
 
     def get(self, request):
         from apps.sales.models import Sale
 
-        qs = Sale.objects.select_related("client", "created_by").all()
+        qs = Sale.objects.select_related("client", "created_by").prefetch_related("items").all()
 
         date_from = request.query_params.get("date_from")
         date_to = request.query_params.get("date_to")
@@ -39,7 +47,11 @@ class ExportSalesView(APIView):
         if date_to:
             qs = qs.filter(sale_date__date__lte=date_to)
 
-        response = export_sales_excel(qs)
+        store_id = request.query_params.get("store")
+        if store_id:
+            qs = qs.filter(items__product__store_id=store_id).distinct()
+
+        response = export_sales_excel(qs, store_label=_store_label(store_id))
         if response is None:
             return Response({"error": "openpyxl non installé"}, status=500)
         return response
@@ -51,13 +63,17 @@ class ExportProductsView(APIView):
     def get(self, request):
         from apps.catalog.models import Product
 
-        qs = Product.objects.select_related("category", "supplier").all()
+        qs = Product.objects.select_related("category", "supplier", "store").all()
+
+        store_id = request.query_params.get("store")
+        if store_id:
+            qs = qs.filter(store_id=store_id)
 
         category_id = request.query_params.get("category")
         if category_id:
             qs = qs.filter(category_id=category_id)
 
-        response = export_products_excel(qs)
+        response = export_products_excel(qs, store_id=store_id, store_label=_store_label(store_id))
         if response is None:
             return Response({"error": "openpyxl non installé"}, status=500)
         return response
@@ -78,7 +94,11 @@ class ExportMovementsView(APIView):
         if date_to:
             qs = qs.filter(created_at__date__lte=date_to)
 
-        response = export_stock_movements_excel(qs)
+        store_id = request.query_params.get("store")
+        if store_id:
+            qs = qs.filter(product__store_id=store_id)
+
+        response = export_stock_movements_excel(qs, store_label=_store_label(store_id))
         if response is None:
             return Response({"error": "openpyxl non installé"}, status=500)
         return response

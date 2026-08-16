@@ -9,9 +9,7 @@ djangorestframework-simplejwt==5.3.1
 
 # ── WEBSOCKETS & REALTIME ALERTS ──────────────────────────────────────────────
 channels==4.0.0
-channels-redis==4.2.0
 daphne==4.1.0
-redis==8.0.0
 
 # ── UTILITIES, IMAGES & EXPORTS ────────────────────────────────────────────────
 pillow==10.3.0

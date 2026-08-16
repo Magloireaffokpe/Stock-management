@@ -6,16 +6,15 @@ services:
     restart: always
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
-      - REDIS_URL=redis://redis:6379/0
+      # Emplacement de la base SQLite (dossier monté pour persistance)
+      - DB_PATH=/app/data/db.sqlite3
     volumes:
       # Mount persistent data files
-      - ./backend/db.sqlite3:/app/db.sqlite3
+      - ./backend/data:/app/data
       - ./backend/media:/app/media
       - ./backend/factures:/app/factures
       - ./backend/backup:/app/backup
       - ./backend/staticfiles:/app/staticfiles
-    depends_on:
-      - redis
 
   frontend:
     build:
@@ -29,10 +28,3 @@ services:
       - ./backend/media:/app/media:ro
       - ./backend/factures:/app/factures:ro
       - ./backend/staticfiles:/app/staticfiles:ro
-    depends_on:
-      - backend
-
-  redis:
-    image: redis:7-alpine
-    container_name: micrologis-redis
-    restart: always

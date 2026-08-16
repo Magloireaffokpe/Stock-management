@@ -28,6 +28,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'last_name': self.user.last_name,
             'email': self.user.email,
             'role': self.user.role,
+            'is_staff': self.user.is_staff,
             'is_superuser': self.user.is_superuser,
         }
         return data
@@ -40,9 +41,10 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'first_name', 'last_name', 'email',
-                  'role', 'phone', 'is_active', 'full_name', 'password',
-                  'date_joined', 'last_login']
-        read_only_fields = ['id', 'date_joined', 'last_login']
+                  'role', 'phone', 'is_active', 'is_staff', 'is_superuser',
+                  'full_name', 'password', 'date_joined', 'last_login']
+        read_only_fields = ['id', 'is_staff', 'is_superuser',
+                            'date_joined', 'last_login']
 
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username

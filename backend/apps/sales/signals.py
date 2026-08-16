@@ -62,8 +62,7 @@ def auto_increment_stock_on_restock(sender, instance, created, **kwargs):
     product = instance.product
     before  = product.stock_quantity
     product.stock_quantity  += instance.quantity
-    product.purchase_price   = instance.unit_cost
-    product.save(update_fields=['stock_quantity', 'purchase_price'])
+    product.save(update_fields=['stock_quantity'])
 
     StockMovement.objects.create(
         product=product,
@@ -71,7 +70,7 @@ def auto_increment_stock_on_restock(sender, instance, created, **kwargs):
         quantity=instance.quantity,
         stock_before=before,
         stock_after=product.stock_quantity,
-        unit_price=instance.unit_cost,
+        unit_price=None,
         reference=instance.restock.reference,
         created_by=instance.restock.created_by,
     )

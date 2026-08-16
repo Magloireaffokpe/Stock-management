@@ -3,14 +3,15 @@ MICROLOGIS Stock Manager — Django Settings
 100% local, SQLite, no cloud dependency
 """
 
+import os
 from pathlib import Path
 from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'micrologis-secret-key-change-in-production-abc123xyz789'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'micrologis-secret-key-change-in-production-abc123xyz789')
 
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '*']
 
@@ -82,10 +83,14 @@ ASGI_APPLICATION = 'config.asgi.application'
 
 # --- BASE DE DONNÉES (SQLite local) ---
 
+# Emplacement de la BDD, surchargeable via la variable d'env DB_PATH
+# (mode Docker : /app/data/db.sqlite3, mode local : backend/db.sqlite3)
+DB_PATH = Path(os.environ.get('DB_PATH', BASE_DIR / 'db.sqlite3'))
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DB_PATH,
         'OPTIONS': {
             'timeout': 30,
         }
@@ -135,7 +140,7 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_PAGINATION_CLASS': 'config.pagination.PageNumberPaginationWithSize',
     'PAGE_SIZE': 50,
 }
 

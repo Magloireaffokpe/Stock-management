@@ -110,9 +110,8 @@ class SaleCreateView(APIView):
         subtotal = sum(
             item['unit_price'] * item['quantity'] for item in items_data
         )
-        discount   = data.get('discount', Decimal(0))
-        tax_amount = ((subtotal - discount) * store.tax_rate / 100).quantize(Decimal('1'))
-        total      = subtotal - discount + tax_amount
+        tax_amount = (subtotal * store.tax_rate / 100).quantize(Decimal('1'))
+        total      = subtotal + tax_amount
         amount_paid = data['amount_paid']
         change_given = max(amount_paid - total, Decimal(0))
 
@@ -120,7 +119,6 @@ class SaleCreateView(APIView):
         sale = Sale.objects.create(
             client_id=data.get('client_id'),
             subtotal=subtotal,
-            discount=discount,
             tax_amount=tax_amount,
             total_amount=total,
             payment_method=data['payment_method'],
@@ -139,7 +137,6 @@ class SaleCreateView(APIView):
                 product_name=product.name,
                 quantity=item['quantity'],
                 unit_price=item['unit_price'],
-                purchase_price=product.purchase_price,
                 subtotal=item['unit_price'] * item['quantity'],
             )
 
@@ -263,9 +260,8 @@ class QuotationConvertView(APIView):
 
         store = StoreSettings.get()
         subtotal = sum(item.unit_price * item.quantity for item in quotation.items.all())
-        discount = Decimal('0')
-        tax_amount = ((subtotal - discount) * store.tax_rate / 100).quantize(Decimal('1'))
-        total = subtotal - discount + tax_amount
+        tax_amount = (subtotal * store.tax_rate / 100).quantize(Decimal('1'))
+        total = subtotal + tax_amount
 
         # Gestion des paiements
         try:
@@ -278,7 +274,6 @@ class QuotationConvertView(APIView):
         sale = Sale.objects.create(
             client_id=quotation.client_id,
             subtotal=subtotal,
-            discount=discount,
             tax_amount=tax_amount,
             total_amount=total,
             payment_method=request.data.get('payment_method', 'cash'),
@@ -297,7 +292,6 @@ class QuotationConvertView(APIView):
                 product_name=product.name,
                 quantity=item.quantity,
                 unit_price=item.unit_price,
-                purchase_price=product.purchase_price,
                 subtotal=item.unit_price * item.quantity,
             )
 
@@ -350,13 +344,10 @@ class RestockCreateView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        total_cost = sum(item['unit_cost'] * item['quantity'] for item in items_data)
-
         import datetime
         restock = Restock.objects.create(
             supplier_id=data.get('supplier_id'),
             restock_date=data.get('restock_date', datetime.date.today()),
-            total_cost=total_cost,
             notes=data.get('notes', ''),
             created_by=request.user,
         )
@@ -367,11 +358,10 @@ class RestockCreateView(APIView):
                 restock=restock,
                 product_id=item['product_id'],
                 quantity=item['quantity'],
-                unit_cost=item['unit_cost'],
             )
 
         from apps.settings_app.utils import log_audit_action
-        log_audit_action(request, 'restock', f"Réapprovisionnement #{restock.reference} enregistré ({total_cost})")
+        log_audit_action(request, 'restock', f"Réapprovisionnement #{restock.reference} enregistré")
 
         return Response(
             RestockSerializer(restock).data,
@@ -379,7 +369,152 @@ class RestockCreateView(APIView):
         )
 
 
-class RestockDetailView(generics.RetrieveAPIView):
+class RestockDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = RestockSerializer
     permission_classes = [IsAuthenticated]
     queryset = Restock.objects.prefetch_related('items__product').select_related('supplier', 'created_by').all()
+
+    def get_permissions(self):
+        if self.request.method in ('PUT', 'PATCH', 'DELETE'):
+            return [IsAdminUser()]
+        return [IsAuthenticated()]
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        """Met à jour un réappro de façon atomique.
+        Le stock est ajusté par la différence (nouvelle qté - ancienne qté)
+        et chaque écart est tracé dans StockMovement."""
+        from apps.stock.models import StockMovement
+        from apps.stock.utils import check_and_create_alert, notify_stock_update
+
+        try:
+            restock = Restock.objects.select_for_update().get(pk=kwargs['pk'])
+        except Restock.DoesNotExist:
+            return Response({'error': 'Réapprovisionnement introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = RestockCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # Anciennes quantités
+        old_items = {}
+        for item in restock.items.select_related('product').all():
+            old_items[item.product_id] = item.quantity
+
+        # Nouvelles quantités (fusion par produit)
+        new_items = {}
+        for item in data['items']:
+            if not Product.objects.filter(id=item['product_id'], is_active=True).exists():
+                return Response(
+                    {'error': f"Produit ID {item['product_id']} introuvable"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            new_items[item['product_id']] = new_items.get(item['product_id'], 0) + item['quantity']
+
+        # Vérifier que le stock restera positif (validation AVANT toute écriture)
+        all_pids = set(old_items) | set(new_items)
+        products = {
+            p.id: p for p in Product.objects.select_for_update().filter(id__in=all_pids)
+        }
+        for pid in all_pids:
+            delta = new_items.get(pid, 0) - old_items.get(pid, 0)
+            product = products[pid]
+            if product.stock_quantity + delta < 0:
+                return Response(
+                    {'error': f"Stock insuffisant pour « {product.name} » (dispo: {product.stock_quantity})"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Appliquer les écarts de stock + traçabilité
+        for pid in all_pids:
+            delta = new_items.get(pid, 0) - old_items.get(pid, 0)
+            if delta == 0:
+                continue
+            product = products[pid]
+            before = product.stock_quantity
+            after = before + delta
+            product.stock_quantity = after
+            product.save(update_fields=['stock_quantity'])
+            StockMovement.objects.create(
+                product=product,
+                movement_type='restock' if delta > 0 else 'restock_cancel',
+                quantity=delta,
+                stock_before=before,
+                stock_after=after,
+                reference=restock.reference,
+                created_by=request.user,
+            )
+            check_and_create_alert(product)
+            notify_stock_update(product)
+
+        # Mise à jour des champs + remplacement des lignes
+        restock.supplier_id = data.get('supplier_id', restock.supplier_id)
+        restock.restock_date = data.get('restock_date', restock.restock_date)
+        restock.notes = data.get('notes', restock.notes)
+        restock.save(update_fields=['supplier', 'restock_date', 'notes'])
+
+        restock.items.all().delete()
+        RestockItem.objects.bulk_create([
+            RestockItem(restock=restock, product_id=pid, quantity=qty)
+            for pid, qty in new_items.items()
+        ])
+
+        from apps.settings_app.utils import log_audit_action
+        log_audit_action(request, 'update', f"Réapprovisionnement #{restock.reference} modifié")
+
+        restock.refresh_from_db()
+        return Response(RestockSerializer(restock).data)
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        """Supprime un réappro de façon atomique.
+        Le stock est diminué des quantités réapprovisionnées et l'annulation
+        est tracée dans StockMovement."""
+        from apps.stock.models import StockMovement
+        from apps.stock.utils import check_and_create_alert, notify_stock_update
+
+        try:
+            restock = Restock.objects.select_for_update().get(pk=kwargs['pk'])
+        except Restock.DoesNotExist:
+            return Response({'error': 'Réapprovisionnement introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+        items = list(restock.items.select_related('product').all())
+        if not items:
+            restock.delete()
+            return Response({'status': 'deleted'})
+
+        # Verrouiller les produits et vérifier que le stock suffira
+        locked = {}
+        for item in items:
+            product = Product.objects.select_for_update().get(pk=item.product_id)
+            before = product.stock_quantity
+            after = before - item.quantity
+            if after < 0:
+                return Response(
+                    {'error': f"Suppression impossible : stock insuffisant pour « {product.name} » (dispo: {before})"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            locked[item.product_id] = (product, item, before, after)
+
+        for product, item, before, after in locked.values():
+            product.stock_quantity = after
+            product.save(update_fields=['stock_quantity'])
+            StockMovement.objects.create(
+                product=product,
+                movement_type='restock_cancel',
+                quantity=-item.quantity,
+                stock_before=before,
+                stock_after=after,
+                reference=restock.reference,
+                created_by=request.user,
+            )
+            check_and_create_alert(product)
+            notify_stock_update(product)
+
+        ref = restock.reference
+        restock.delete()
+
+        from apps.settings_app.utils import log_audit_action
+        log_audit_action(request, 'delete', f"Réapprovisionnement #{ref} supprimé (stock ajusté)")
+
+        return Response({'status': 'deleted', 'reference': ref})

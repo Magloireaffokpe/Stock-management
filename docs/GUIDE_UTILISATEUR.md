@@ -181,6 +181,35 @@ Cliquez sur le menu **Lexique** tout en bas à gauche. C'est un dictionnaire int
 
 ---
 
+## 👥 11. Les rôles : Admin et Employé
+
+Le logiciel distingue deux types de comptes :
+
+### L'Administrateur (le gérant)
+Il a accès à **tout** :
+- créer et modifier boutiques, catégories, produits, fournisseurs ;
+- gérer le stock (réapprovisionnements, ajustements) ;
+- modifier les paramètres, créer des utilisateurs, voir les rapports et le journal d'activité ;
+- accéder à l'administration Django (`http://localhost/admin/`).
+
+### L'Employé (le vendeur)
+Son compte est **en lecture seule** sur l'organisation :
+- il **voit** toutes les boutiques, catégories et produits, mais les boutons "Ajouter / Modifier / Supprimer" ne s'affichent pas ;
+- il peut vendre au point de vente et saisir librement le prix de vente ;
+- il gère son propre profil (prénom, mot de passe).
+
+> 💡 Même si un employé essayait de créer un produit "à la main", le logiciel refuserait : l'accès est aussi verrouillé côté serveur, pas seulement dans l'affichage.
+
+## 🏬 12. Plusieurs boutiques
+
+L'application gère **plusieurs boutiques** : chaque boutique a ses propres catégories et produits.
+
+- La page **Boutiques** (admin seulement) permet d'ajouter, renommer ou réorganiser les boutiques, et d'y organiser les catégories en sous-catégories (jusqu'à 4 niveaux).
+- Dans le **Point de vente**, l'employé voit les produits de toutes les boutiques et peut composer un panier qui mélange les boutiques.
+- La page **Stock** permet de filtrer par boutique.
+
+---
+
 ### 🎉 Vous êtes prêt(e) !
 Le logiciel est conçu pour être impossible à "casser". N'ayez pas peur de cliquer et de naviguer. Le principe d'or est simple :
 **Les ventes diminuent le stock. Les réapprovisionnements augmentent le stock. Le logiciel calcule le reste.**

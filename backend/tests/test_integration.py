@@ -35,25 +35,23 @@ class ScenarioJournéeVenteTest(BaseTestCase):
         )
         client = make_client(first_name='Patrice', last_name='Agboton')
 
-        # 2. Vente 1 : client enregistré achète un laptop (prix négocié 295000, remise 5000)
+        # 2. Vente 1 : client enregistré achète un laptop (prix négocié 295000)
         r1 = self.employee_client.post('/api/sales/sales/create/', {
             'client_id': client.pk,
             'items': [{'product_id': laptop.pk, 'quantity': 1, 'unit_price': 295000}],
             'payment_method': 'mtn',
             'amount_paid': 295000,
-            'discount': 5000,
         }, format='json')
         self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
         self.assertStockEquals(laptop, 4)
-        # total = subtotal(295000) - discount(5000) = 290000
-        self.assertEqual(Decimal(str(r1.data['total_amount'])), Decimal('290000'))
+        # total = subtotal(295000)
+        self.assertEqual(Decimal(str(r1.data['total_amount'])), Decimal('295000'))
 
-        # 3. Vente 2 : client comptoir, 2 téléphones, avec remise
+        # 3. Vente 2 : client comptoir, 2 téléphones
         r2 = self.employee_client.post('/api/sales/sales/create/', {
             'items': [{'product_id': phone.pk, 'quantity': 2, 'unit_price': 105000}],
             'payment_method': 'cash',
             'amount_paid': 220000,
-            'discount': 0,
         }, format='json')
         self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
         self.assertStockEquals(phone, 8)
@@ -61,12 +59,12 @@ class ScenarioJournéeVenteTest(BaseTestCase):
         self.assertEqual(Decimal(str(r2.data['change_given'])), Decimal('10000'))
 
         # 4. Vérifier le dashboard reflète les 2 ventes
-        # Vente 1 : total = 295000 - 5000 = 290000
+        # Vente 1 : total = 295000
         # Vente 2 : total = 2 × 105000 = 210000
-        # Cumul attendu = 500000
+        # Cumul attendu = 505000
         r_kpi = self.admin_client.get('/api/reports/dashboard/')
         self.assertGreaterEqual(r_kpi.data['today']['count'], 2)
-        self.assertGreaterEqual(r_kpi.data['today']['revenue'], 500000)
+        self.assertGreaterEqual(r_kpi.data['today']['revenue'], 505000)
 
         # 5. Vérifier les mouvements tracés
         laptop_mvts = StockMovement.objects.filter(product=laptop, movement_type='sale')
@@ -130,14 +128,14 @@ class ScenarioRuptureStockTest(BaseTestCase):
 
         # RÉAPPRO par l'admin
         r_reappro = self.admin_client.post('/api/sales/restocks/create/', {
-            'items': [{'product_id': produit.pk, 'quantity': 20, 'unit_cost': 4800}],
+            'items': [{'product_id': produit.pk, 'quantity': 20}],
         }, format='json')
         self.assertEqual(r_reappro.status_code, status.HTTP_201_CREATED)
         self.assertStockEquals(produit, 20)
 
-        # Prix d'achat mis à jour
+        # Verify stock was replenished correctly
         produit.refresh_from_db()
-        self.assertEqual(produit.purchase_price, Decimal('4800'))
+        self.assertEqual(produit.stock_quantity, 20)
 
         # Alertes résolues automatiquement
         non_résolues = StockAlert.objects.filter(product=produit, is_resolved=False)
@@ -367,5 +365,122 @@ class ScenarioAjustementStockTest(BaseTestCase):
 
         # Export Excel doit contenir tous ces mouvements
         r_export = self.admin_client.get('/api/reports/export/movements/')
+        self.assertEqual(r_export.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(r_export.content), 1000)
+
+
+class ScenarioChronologieStockTest(BaseTestCase):
+    """
+    Scénario E2E : Chronologie complète de la vie d'un produit.
+    Stock initial → réappro → vente → perte → correction → annulation de vente
+    → annulation de réappro. Vérifie la continuité stock_before/stock_after de
+    chaque mouvement ainsi que l'impact sur le chiffre d'affaires.
+    """
+
+    def test_chronologie_complète_du_stock(self):
+        from apps.stock.models import StockMovement
+
+        cat = make_category(name='Chrono Cat')
+        store = cat.store
+
+        # 1. Création du produit via l'API → mouvement « initial » (0 → 10)
+        r_create = self.admin_client.post('/api/catalog/products/', {
+            'name': 'Produit Chronologie',
+            'category': cat.pk,
+            'store': store.pk,
+            'selling_price': 1000,
+            'stock_quantity': 10,
+            'low_stock_threshold': 3,
+        }, format='json')
+        self.assertEqual(r_create.status_code, status.HTTP_201_CREATED)
+        pid = r_create.data['id']
+
+        from apps.catalog.models import Product
+        p = Product.objects.get(pk=pid)
+        self.assertMovementExists(p, 'initial', 10)
+
+        # 2. Réappro +5 → stock 15
+        r_restock = self.admin_client.post('/api/sales/restocks/create/', {
+            'items': [{'product_id': pid, 'quantity': 5}],
+        }, format='json')
+        self.assertEqual(r_restock.status_code, status.HTTP_201_CREATED)
+        self.assertStockEquals(p, 15)
+        self.assertMovementExists(p, 'restock', 5)
+
+        # 3. Vente 2 @1000 → stock 13, CA = 2000
+        r_sale1 = self.employee_client.post('/api/sales/sales/create/', {
+            'items': [{'product_id': pid, 'quantity': 2, 'unit_price': 1000}],
+            'payment_method': 'cash',
+            'amount_paid': 2000,
+        }, format='json')
+        self.assertEqual(r_sale1.status_code, status.HTTP_201_CREATED)
+        self.assertStockEquals(p, 13)
+        self.assertMovementExists(p, 'sale', -2)
+
+        # 4. Perte -1 → stock 12
+        r_loss = self.admin_client.post('/api/stock/adjust/', {
+            'product_id': pid, 'quantity': -1,
+            'movement_type': 'loss', 'note': 'Casse',
+        }, format='json')
+        self.assertEqual(r_loss.status_code, status.HTTP_201_CREATED)
+        self.assertStockEquals(p, 12)
+        self.assertMovementExists(p, 'loss', -1)
+
+        # 5. Correction via fiche produit → stock 20 (mouvement « correction »)
+        r_patch = self.admin_client.patch(f'/api/catalog/products/{pid}/', {
+            'stock_quantity': 20,
+        }, format='json')
+        self.assertEqual(r_patch.status_code, status.HTTP_200_OK)
+        self.assertStockEquals(p, 20)
+        self.assertMovementExists(p, 'correction', 8)
+
+        # 6. Deuxième vente 3 @1000 → stock 17, CA cumulé = 5000
+        r_sale2 = self.employee_client.post('/api/sales/sales/create/', {
+            'items': [{'product_id': pid, 'quantity': 3, 'unit_price': 1000}],
+            'payment_method': 'cash',
+            'amount_paid': 3000,
+        }, format='json')
+        self.assertEqual(r_sale2.status_code, status.HTTP_201_CREATED)
+        self.assertStockEquals(p, 17)
+
+        r_kpi = self.admin_client.get('/api/reports/dashboard/')
+        self.assertEqual(r_kpi.data['today']['count'], 2)
+        self.assertEqual(r_kpi.data['today']['revenue'], 5000)
+
+        # 7. Annulation de la 2e vente → stock 20, CA redescend à 2000
+        r_cancel = self.admin_client.post(f"/api/sales/sales/{r_sale2.data['id']}/cancel/")
+        self.assertEqual(r_cancel.status_code, status.HTTP_200_OK)
+        self.assertStockEquals(p, 20)
+        self.assertMovementExists(p, 'sale_cancel', 3)
+
+        r_kpi2 = self.admin_client.get('/api/reports/dashboard/')
+        self.assertEqual(r_kpi2.data['today']['count'], 1)
+        self.assertEqual(r_kpi2.data['today']['revenue'], 2000)
+
+        # 8. Nouveau réappro +2 → stock 22, puis suppression → stock 20
+        r_restock2 = self.admin_client.post('/api/sales/restocks/create/', {
+            'items': [{'product_id': pid, 'quantity': 2}],
+        }, format='json')
+        self.assertEqual(r_restock2.status_code, status.HTTP_201_CREATED)
+        self.assertStockEquals(p, 22)
+
+        r_del = self.admin_client.delete(f"/api/sales/restocks/{r_restock2.data['id']}/")
+        self.assertEqual(r_del.status_code, status.HTTP_200_OK)
+        self.assertStockEquals(p, 20)
+        self.assertMovementExists(p, 'restock_cancel', -2)
+
+        # 9. Continuité chronologique : stock_before(n+1) == stock_after(n)
+        mvts = list(StockMovement.objects.filter(product=p).order_by('created_at', 'id'))
+        self.assertEqual(mvts[0].movement_type, 'initial')
+        self.assertEqual(mvts[0].stock_before, 0)
+        for prev, curr in zip(mvts, mvts[1:]):
+            self.assertEqual(
+                curr.stock_before, prev.stock_after,
+                f'Rupture de continuité entre {prev.movement_type} et {curr.movement_type}'
+            )
+        self.assertEqual(mvts[-1].stock_after, 20)
+
+        # 10. L'export des ventes contient les 2 ventes (dont 1 annulée)
+        r_export = self.admin_client.get('/api/reports/export/sales/')
         self.assertEqual(r_export.status_code, status.HTTP_200_OK)
         self.assertGreater(len(r_export.content), 1000)

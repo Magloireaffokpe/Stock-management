@@ -84,7 +84,6 @@ class Sale(models.Model):
     )
     sale_date      = models.DateTimeField(default=timezone.now, db_index=True)
     subtotal       = models.DecimalField(max_digits=14, decimal_places=0)
-    discount       = models.DecimalField(max_digits=14, decimal_places=0, default=0)
     tax_amount     = models.DecimalField(max_digits=14, decimal_places=0, default=0)
     total_amount   = models.DecimalField(max_digits=14, decimal_places=0)
     payment_method = models.CharField(max_length=15, choices=PAYMENT_METHODS, default='cash')
@@ -116,10 +115,6 @@ class Sale(models.Model):
             self.invoice_number = generate_invoice_number()
         super().save(*args, **kwargs)
 
-    @property
-    def total_margin(self):
-        return sum(item.margin for item in self.items.all())
-
 
 class SaleItem(models.Model):
     sale           = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='items')
@@ -134,8 +129,6 @@ class SaleItem(models.Model):
         indexes = [
             models.Index(fields=['sale', 'product']),
         ]
-
-    # Margin calculation removed as cost is no longer tracked
 
 
 

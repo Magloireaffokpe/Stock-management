@@ -9,7 +9,7 @@ class ClientAdmin(admin.ModelAdmin):
 class SaleItemInline(admin.TabularInline):
     model = SaleItem
     extra = 0
-    readonly_fields = ['product_name', 'purchase_price', 'subtotal']
+    readonly_fields = ['product_name', 'subtotal']
 
 @admin.register(Sale)
 class SaleAdmin(admin.ModelAdmin):
@@ -25,5 +25,5 @@ class RestockItemInline(admin.TabularInline):
 
 @admin.register(Restock)
 class RestockAdmin(admin.ModelAdmin):
-    list_display = ['reference', 'supplier', 'restock_date', 'total_cost', 'created_at']
+    list_display = ['reference', 'supplier', 'restock_date', 'created_at']
     inlines      = [RestockItemInline]

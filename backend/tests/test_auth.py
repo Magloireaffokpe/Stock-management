@@ -25,6 +25,20 @@ class LoginTest(BaseTestCase):
         user_data = r.data['user']
         self.assertEqual(user_data['username'], 'admin_test')
         self.assertEqual(user_data['role'], 'admin')
+        self.assertTrue(user_data['is_staff'])
+        self.assertTrue(user_data['is_superuser'])
+
+    def test_login_employé_payload_ne_grant_pas_admin(self):
+        """Un employé ne doit jamais apparaître staff/superuser dans le payload"""
+        r = self.client.post('/api/auth/login/', {
+            'username': 'employee_test',
+            'password': 'testpass123',
+        })
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        user_data = r.data['user']
+        self.assertEqual(user_data['role'], 'employee')
+        self.assertFalse(user_data['is_staff'])
+        self.assertFalse(user_data['is_superuser'])
 
     def test_login_mauvais_mot_de_passe_retourne_401(self):
         r = self.client.post('/api/auth/login/', {
@@ -125,6 +139,8 @@ class ProfileTest(BaseTestCase):
         self.assertEqual(r.data['username'], 'admin_test')
         self.assertEqual(r.data['role'], 'admin')
         self.assertIn('email', r.data)
+        self.assertIn('is_staff', r.data)
+        self.assertIn('is_superuser', r.data)
 
     def test_get_me_sans_auth_retourne_401(self):
         r = self.client.get('/api/auth/me/')
@@ -149,6 +165,15 @@ class ProfileTest(BaseTestCase):
         # Remettre le mot de passe d'origine
         self.admin.set_password('testpass123')
         self.admin.save()
+
+    def test_patch_me_modifier_téléphone(self):
+        r = self.employee_client.patch('/api/auth/me/', {
+            'phone': '+229 96 11 22 33',
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertEqual(r.data['phone'], '+229 96 11 22 33')
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.phone, '+229 96 11 22 33')
 
     def test_patch_me_employé_ne_peut_pas_changer_rôle(self):
         """Le champ rôle ne doit pas être dans les champs allowed de /me/"""
@@ -206,6 +231,43 @@ class UserManagementTest(BaseTestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         target.refresh_from_db()
         self.assertFalse(target.is_active)
+
+    def test_modifier_tous_les_champs_employé(self):
+        """L'admin peut modifier tous les champs d'un employé, dont le mot de passe"""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        target = make_employee(username='edit_target')
+
+        r = self.admin_client.patch(f'/api/auth/users/{target.id}/', {
+            'username': 'renommé',
+            'first_name': 'Awa',
+            'last_name': 'Sagbo',
+            'email': 'awa@micrologis.bj',
+            'phone': '+229 97 55 44 33',
+            'role': 'admin',
+            'password': 'nouveauMdp789',
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+
+        target.refresh_from_db()
+        self.assertEqual(target.username, 'renommé')
+        self.assertEqual(target.first_name, 'Awa')
+        self.assertEqual(target.last_name, 'Sagbo')
+        self.assertEqual(target.email, 'awa@micrologis.bj')
+        self.assertEqual(target.phone, '+229 97 55 44 33')
+        self.assertEqual(target.role, 'admin')
+        self.assertTrue(target.check_password('nouveauMdp789'))
+
+    def test_modifier_employé_peut_ignorer_le_mot_de_passe(self):
+        """PATCH sans champ password → le mot de passe reste inchangé"""
+        target = make_employee(username='no_pwd_change')
+        old_hash = target.password
+        r = self.admin_client.patch(f'/api/auth/users/{target.id}/', {
+            'first_name': 'Ami',
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        target.refresh_from_db()
+        self.assertEqual(target.password, old_hash)
 
     def test_supprimer_son_propre_compte_interdit(self):
         r = self.admin_client.delete(f'/api/auth/users/{self.admin.id}/')

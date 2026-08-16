@@ -6,13 +6,15 @@ class StockMovement(models.Model):
     """Trace CHAQUE mouvement de stock — cœur de la traçabilité"""
 
     MOVEMENT_TYPES = [
-        ('sale',         'Vente'),
-        ('sale_cancel',  'Annulation vente'),
-        ('restock',      'Réapprovisionnement'),
-        ('adjustment',   'Ajustement manuel'),
-        ('loss',         'Perte / Casse'),
-        ('return',       'Retour client'),
-        ('initial',      'Stock initial'),
+        ('sale',          'Vente'),
+        ('sale_cancel',   'Annulation vente'),
+        ('restock',       'Réapprovisionnement'),
+        ('restock_cancel','Annulation réappro'),
+        ('adjustment',    'Ajustement manuel'),
+        ('correction',    'Correction produit'),
+        ('loss',          'Perte / Casse'),
+        ('return',        'Retour client'),
+        ('initial',       'Stock initial'),
     ]
 
     product        = models.ForeignKey(

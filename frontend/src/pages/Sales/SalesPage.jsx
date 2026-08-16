@@ -4,15 +4,10 @@ import {
   Receipt, X, Calendar
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import { salesAPI, reportsAPI, formatCurrency, formatDatetime, downloadBlob } from '../../api'
+import { salesAPI, reportsAPI, formatCurrency, formatDatetime, downloadBlob, filenameFromResponse } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
 import useAuthStore from '../../store/authStore'
 import toast from 'react-hot-toast'
-
-const PAYMENT_LABELS = {
-  cash:'Espèces', mtn:'MTN MoMo', moov:'Moov Money',
-  celtiis:'Celtiis Money', card:'Carte', transfer:'Virement', mixed:'Mixte',
-}
 
 export default function SalesPage() {
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
@@ -21,7 +16,6 @@ export default function SalesPage() {
   const [sales, setSales]       = useState([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
-  const [payFilter, setPayFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
@@ -36,7 +30,6 @@ export default function SalesPage() {
       const params = {
         page, page_size: pageSize, ordering: '-created_at',
         ...(search && { search }),
-        ...(payFilter && { payment_method: payFilter }),
         ...(statusFilter !== '' && { is_cancelled: statusFilter }),
         ...(dateFrom && { date_from: dateFrom }),
         ...(dateTo   && { date_to: dateTo }),
@@ -46,7 +39,7 @@ export default function SalesPage() {
       setTotalCount(res.data?.count ?? 0)
     } catch { toast.error('Erreur chargement') }
     finally { setLoading(false) }
-  }, [page, search, payFilter, statusFilter, dateFrom, dateTo, pageSize])
+  }, [page, search, statusFilter, dateFrom, dateTo, pageSize])
 
   useEffect(() => { load() }, [load])
 
@@ -63,14 +56,14 @@ export default function SalesPage() {
     setExporting(true)
     try {
       const res = await reportsAPI.exportSales({ date_from: dateFrom, date_to: dateTo })
-      downloadBlob(res.data, 'ventes.xlsx')
+      downloadBlob(res.data, filenameFromResponse(res, 'ventes.xlsx'))
       toast.success('Export téléchargé')
     } catch { toast.error('Erreur export') }
     finally { setExporting(false) }
   }
 
   const totalPages = Math.ceil(totalCount / pageSize)
-  const hasFilters = search || payFilter || statusFilter !== '' || dateFrom || dateTo
+  const hasFilters = search || statusFilter !== '' || dateFrom || dateTo
 
   return (
     <div>
@@ -98,11 +91,6 @@ export default function SalesPage() {
           <input className="input has-icon" placeholder="N° facture, client…"
             value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
         </div>
-        <select className="input" style={{ width:160 }} value={payFilter}
-          onChange={e => { setPayFilter(e.target.value); setPage(1) }}>
-          <option value="">Tout paiement</option>
-          {Object.entries(PAYMENT_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
         <select className="input" style={{ width:140 }} value={statusFilter}
           onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
           <option value="">Tous statuts</option>
@@ -119,7 +107,7 @@ export default function SalesPage() {
         </div>
         {hasFilters && (
           <button className="btn btn-ghost btn-sm" onClick={() => {
-            setSearch(''); setPayFilter(''); setStatusFilter(''); setDateFrom(''); setDateTo(''); setPage(1)
+            setSearch(''); setStatusFilter(''); setDateFrom(''); setDateTo(''); setPage(1)
           }}><X size={13} /> Réinitialiser</button>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -144,7 +132,7 @@ export default function SalesPage() {
           ) : (
             <table>
               <thead><tr>
-                <th>Facture</th><th>Date</th><th>Client</th><th>Paiement</th>
+                <th>Facture</th><th>Date</th><th>Client</th>
                 <th>Caissier</th><th style={{textAlign:'right'}}>Total</th>
                 <th style={{textAlign:'center'}}>Statut</th><th></th>
               </tr></thead>
@@ -154,7 +142,6 @@ export default function SalesPage() {
                     <td><span className="td-mono" style={{ color:'var(--blue-600)', fontSize:'0.82rem' }}>{s.invoice_number}</span></td>
                     <td style={{ fontSize:'0.8rem', color:'var(--text-secondary)' }}>{formatDatetime(s.created_at)}</td>
                     <td style={{ fontSize:'0.85rem' }}>{s.client_name || 'Comptoir'}</td>
-                    <td><span className="badge badge-blue" style={{ fontSize:'0.68rem' }}>{PAYMENT_LABELS[s.payment_method] || s.payment_method}</span></td>
                     <td style={{ fontSize:'0.8rem', color:'var(--text-secondary)' }}>{s.created_by_name || '—'}</td>
                     <td className="text-right">
                       <span style={{ fontFamily:'var(--font-mono)', fontWeight:700, fontSize:'0.875rem', color: s.is_cancelled ? 'var(--text-muted)' : 'var(--text-primary)' }}>

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Package, Activity, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
 import { catalogAPI, stockAPI, formatCurrency, formatDatetime } from '../../api'
-import useAuthStore from '../../store/authStore'
 import useSettingsStore from '../../store/settingsStore'
 import toast from 'react-hot-toast'
 
@@ -25,7 +24,6 @@ const MOVEMENT_ICONS = {
 export default function ProductDetailPage() {
   const { id } = useParams()
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
-  const isAdmin = useAuthStore(s => s.isAdmin())
   const [product, setProduct] = useState(null)
   const [movements, setMovements] = useState([])
   const [loading, setLoading] = useState(true)
@@ -87,25 +85,19 @@ export default function ProductDetailPage() {
               </div>
               <div className="divider" style={{ margin: '10px 0' }} />
               
-              {isAdmin && (
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8, fontSize:'0.875rem' }}>
-                  <span style={{ color:'var(--text-secondary)' }}>Prix d'achat</span>
-                  <span style={{ fontFamily:'var(--font-mono)', fontWeight:600 }}>{formatCurrency(product.purchase_price, currency)}</span>
-                </div>
-              )}
+              <div className="divider" style={{ margin: '10px 0' }} />
+
               <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8, fontSize:'0.875rem' }}>
                 <span style={{ color:'var(--text-secondary)' }}>Prix de vente</span>
                 <span style={{ fontFamily:'var(--font-mono)', fontWeight:700, color: 'var(--blue-600)' }}>{formatCurrency(product.selling_price, currency)}</span>
               </div>
-              {isAdmin && (
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8, fontSize:'0.875rem' }}>
-                  <span style={{ color:'var(--text-secondary)' }}>Marge brute</span>
-                  <span style={{ fontFamily:'var(--font-mono)', fontWeight:600, color: 'var(--success)' }}>+{product.margin_percent}%</span>
-                </div>
-              )}
-              
+
               <div className="divider" style={{ margin: '10px 0' }} />
-              
+
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8, fontSize:'0.85rem' }}>
+                <span style={{ color:'var(--text-secondary)' }}>Boutique</span>
+                <span style={{ fontWeight: 600 }}>{product.store_name || '—'}</span>
+              </div>
               <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8, fontSize:'0.85rem' }}>
                 <span style={{ color:'var(--text-secondary)' }}>Seuil d'alerte</span>
                 <span style={{ fontFamily:'var(--font-mono)' }}>{product.low_stock_threshold || 'Global'}</span>

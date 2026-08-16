@@ -101,7 +101,9 @@ cd "Stock management"
 docker compose up --build -d
 ```
 
-Le premier démarrage télécharge les images nécessaires puis construit les conteneurs backend, frontend et Redis.
+Le premier démarrage construit les images nécessaires puis lance les conteneurs backend et frontend.
+
+> **Fonctionnement hors-ligne :** aucune dépendance cloud ni connexion Internet n'est nécessaire au fonctionnement (base SQLite locale, WebSocket en mémoire, PDF générés localement). Internet n'est requis qu'au **premier build** des images — ou utilisez `docker save` / `docker load` pour transférer les images déjà construites (voir README §3).
 
 ### 3.3 Compte administrateur initial
 
@@ -110,7 +112,9 @@ Au premier lancement, l’application crée automatiquement un compte administra
 - Nom d’utilisateur : `admin`
 - Mot de passe : `micrologis2026`
 
-Il est recommandé de le changer immédiatement après la première connexion.
+Le compte n'est créé que s'il n'existe pas (jamais réinitialisé). Identifiants configurables via les variables d'environnement `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` du service backend.
+
+Il est recommandé de le changer immédiatement après la première connexion (Paramètres → Mon profil) ou via l'administration Django `http://localhost/admin/`.
 
 ### 3.4 Vérification post-installation
 
@@ -118,7 +122,7 @@ Il est recommandé de le changer immédiatement après la première connexion.
 docker compose ps
 ```
 
-Vous devriez voir les services backend, frontend et redis en état `Up`.
+Vous devriez voir les services backend et frontend en état `Up`.
 
 ---
 
@@ -153,6 +157,7 @@ docker compose up --build -d
 | URL | Description |
 |---|---|
 | `http://localhost` | Interface principale (frontend via Nginx) |
+| `http://localhost/admin/` | Administration Django (comptes `is_staff`/`is_superuser`) |
 | `http://localhost/api/` | API Django REST |
 | `ws://localhost/ws/stock/` | WebSocket alertes temps réel |
 
@@ -162,6 +167,7 @@ L’application est exposée via le port 80 de la machine hôte. Il suffit de po
 
 ```text
 http://<ip-de-la-machine>
+http://<ip-de-la-machine>/admin/
 ```
 
 ---
@@ -179,27 +185,32 @@ micrologis-stock/
 │   ├── apps/
 │   │   ├── settings_app/        ← Paramètres magasin (singleton id=1)
 │   │   ├── auth_app/            ← Utilisateurs + JWT + journal activité
-│   │   ├── catalog/             ← Produits, catégories, fournisseurs
+│   │   ├── stores/              ← Boutiques (multi-boutique)
+│   │   ├── catalog/             ← Produits, catégories (arborescence ≤ 4 niveaux), fournisseurs
 │   │   ├── sales/               ← Ventes, devis, réappros, clients, SIGNALS
 │   │   ├── stock/               ← Mouvements, alertes, WebSocket consumer
 │   │   └── reports/             ← Dashboard KPIs, exports Excel + PDF
-│   ├── tests/                   ← 189 tests (unitaires + intégration + E2E)
+│   ├── tests/                   ← 254 tests (unitaires + intégration + E2E)
 │   │   ├── base.py              ← Classe de base + assertions métier
 │   │   ├── factories.py         ← Création objets de test (UUID unique)
-│   │   ├── test_settings.py     ← 18 tests
-│   │   ├── test_auth.py         ← 23 tests
-│   │   ├── test_catalog.py      ← 32 tests
+│   │   ├── test_settings.py     ← 26 tests
+│   │   ├── test_auth.py         ← 27 tests
+│   │   ├── test_catalog.py      ← 36 tests
+│   │   ├── test_permissions.py  ← 21 tests (rôles admin/employé)
+│   │   ├── test_stores.py       ← Multi-boutique
 │   │   ├── test_stock.py        ← 28 tests
 │   │   ├── test_sales.py        ← 47 tests
 │   │   ├── test_reports.py      ← 34 tests
-│   │   └── test_integration.py  ← 7 scénarios E2E
+│   │   └── test_integration.py  ← scénarios E2E
 │   ├── templates/invoices/
 │   │   └── facture.html         ← Template PDF (WeasyPrint)
 │   ├── initial_data.json        ← Données initiales
 │   ├── requirements.txt
 │   ├── pytest.ini
 │   ├── manage.py
-│   ├── db.sqlite3               ← BASE DE DONNÉES (unique fichier)
+│   ├── entrypoint.sh            ← Migrations + admin + Daphne (dans Docker)
+│   ├── data/db.sqlite3          ← BASE DE DONNÉES (mode Docker)
+│   ├── db.sqlite3               ← BASE DE DONNÉES (mode local, hors Docker)
 │   ├── media/                   ← Images uploadées
 │   ├── factures/                ← PDFs générés
 │   └── backup/                  ← Sauvegardes automatiques
@@ -244,8 +255,7 @@ djangorestframework==3.15.2          API REST
 djangorestframework-simplejwt==5.3.1 Authentification JWT (access + refresh tokens)
 django-cors-headers==4.3.1           CORS pour les appels React
 django-filter==23.5                  Filtres API (?stock_status=low, ?category=1…)
-channels==4.0.0                      WebSocket — alertes temps réel
-channels-redis==4.2.0                Backend channel layers (InMemory ici)
+channels==4.0.0                      WebSocket — alertes temps réel (couche InMemory, sans Redis)
 daphne==4.1.0                        Serveur ASGI (HTTP + WebSocket)
 Pillow==10.3.0                       Traitement images (logo, photos produits)
 WeasyPrint==62.3                     Génération PDF factures (optionnel)
@@ -257,10 +267,13 @@ python-dateutil==2.9.0               Manipulation dates
 
 ```python
 # BDD — fichier local unique, pas de serveur requis
+# Emplacement surchargeable via la variable d'environnement DB_PATH
+# (mode Docker : /app/data/db.sqlite3 → backend/data/db.sqlite3 sur l'hôte)
+DB_PATH = Path(os.environ.get('DB_PATH', BASE_DIR / 'db.sqlite3'))
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DB_PATH,
         'OPTIONS': {'timeout': 30},  # évite les verrous concurrents
     }
 }
@@ -354,6 +367,29 @@ python -m pytest tests/test_sales.py -v            # Un module
 python -m pytest tests/ --cov=apps --cov-report=html  # Avec couverture
 python -m pytest tests/ -x                         # Stopper au 1er échec
 ```
+
+### 6.5 Rôles, permissions et multi-boutique
+
+**Règle unique** (frontend et backend identiques) : un utilisateur est **admin** si `role == 'admin'` **ou** `is_staff` **ou** `is_superuser`.
+
+| Rôle | Boutiques / Catégories / Produits | Stock / Réappros | Ventes (POS) | Paramètres / Utilisateurs / Admin Django |
+|---|---|---|---|---|
+| Admin | Lecture + écriture | Lecture + écriture | Lecture + écriture | Oui |
+| Employé | **Lecture seule** (403 sur POST/PUT/PATCH/DELETE) | Lecture seule | Création de ventes (prix libre) | Non |
+
+Implémentation :
+
+- `apps/stores/views.py` et `apps/catalog/views.py` : permission `IsAdminOrReadOnly` (GET/HEAD/OPTIONS pour tous, écriture réservée aux admins). La suppression d'une boutique est refusée en 405.
+- `apps/sales/views.py` : création de vente `IsAuthenticated`, `unit_price` libre (aucune borne vs `selling_price`).
+- Frontend : garde `isAdmin()` (store `authStore.js`) sur les boutons Ajouter/Modifier/Supprimer de Boutiques, Catalogue, Stock, Réappros.
+- Vérifié par `tests/test_permissions.py` (21 tests).
+
+**Multi-boutique** :
+
+- Modèle `Store` (`apps/stores`) : `name`, `slug`, `is_active`, `order`.
+- Catégories et produits rattachés à une boutique (`store` FK) ; arborescence de catégories limitée à 4 niveaux (`MAX_CATEGORY_DEPTH = 4`, validé dans `apps/catalog/models.py`).
+- La liste `/api/catalog/products/` n'est pas filtrée par rôle : l'employé voit le catalogue de **toutes** les boutiques.
+- Les ventes peuvent mélanger des produits de boutiques différentes dans un même panier.
 
 ---
 
@@ -901,7 +937,9 @@ python manage.py runserver 0.0.0.0:9000
 proxy: { '/api': { target: 'http://localhost:9000' } }
 ```
 
-### Activer Redis pour WebSocket (multi-workers)
+### Activer Redis pour WebSocket (optionnel, multi-workers)
+
+> Le déploiement standard n'utilise **pas** Redis (couche InMemory — parfait pour une machine locale). Redis n'est utile que si l'on déploie plusieurs workers Daphne. Pour l'activer, il faut d'abord **ré-ajouter** `channels-redis` dans `requirements.txt` puis relancer le build :
 
 ```python
 # settings.py

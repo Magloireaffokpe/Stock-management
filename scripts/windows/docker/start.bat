@@ -21,7 +21,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "backend\db.sqlite3" type nul > "backend\db.sqlite3"
+if not exist "backend\data" mkdir "backend\data"
 
 echo Demarrage des conteneurs...
 docker compose up -d

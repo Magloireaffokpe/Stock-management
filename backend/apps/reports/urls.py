@@ -12,11 +12,9 @@ urlpatterns = [
     path('charts/daily/', views.SalesChartView.as_view(), name='sales-chart-daily'),
     path('charts/monthly/', views.MonthlySalesChartView.as_view(), name='sales-chart-monthly'),
     path('charts/categories/', views.CategorySalesView.as_view(), name='category-sales'),
-    path('charts/payment-methods/', views.PaymentMethodStatsView.as_view(), name='payment-methods'),
 
     # Stats
     path('top-products/', views.TopProductsView.as_view(), name='top-products'),
-    path('stock-value/', views.StockValueView.as_view(), name='stock-value'),
 
     # Exports Excel
     path('export/sales/', export_views.ExportSalesView.as_view(), name='export-sales'),

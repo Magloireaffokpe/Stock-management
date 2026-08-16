@@ -6,8 +6,6 @@ import useSettingsStore from '../../store/settingsStore'
 import useAuthStore from '../../store/authStore'
 import toast from 'react-hot-toast'
 
-const PAYMENT_LABELS = { cash:'Espèces', mtn:'MTN MoMo', moov:'Moov Money', celtiis:'Celtiis Money', card:'Carte', transfer:'Virement', mixed:'Mixte' }
-
 export default function SaleDetailPage() {
   const { id } = useParams()
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
@@ -76,42 +74,31 @@ export default function SaleDetailPage() {
                   <th style={{textAlign:'center'}}>Qté</th>
                   <th style={{textAlign:'right'}}>Prix unit.</th>
                   <th style={{textAlign:'right'}}>Sous-total</th>
-                  {isAdmin && <th style={{textAlign:'right'}}>Marge</th>}
                 </tr></thead>
                 <tbody>
-                  {sale.items?.map(item => {
-                    const margin = (parseFloat(item.unit_price) - parseFloat(item.purchase_price)) * item.quantity
-                    return (
-                      <tr key={item.id}>
-                        <td>
-                          <div style={{ fontWeight:600, fontSize:'0.875rem' }}>{item.product_name}</div>
-                        </td>
-                        <td>
-                          <div style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{item.supplier_name || '—'}</div>
-                        </td>
-                        <td style={{ textAlign:'center' }}>
-                          <span style={{ fontFamily:'var(--font-mono)', fontWeight:700 }}>{item.quantity}</span>
-                        </td>
-                        <td className="text-right">
-                          <span style={{ fontFamily:'var(--font-mono)', fontSize:'0.85rem' }}>
-                            {formatCurrency(item.unit_price, currency)}
-                          </span>
-                        </td>
-                        <td className="text-right">
-                          <span style={{ fontFamily:'var(--font-mono)', fontWeight:700 }}>
-                            {formatCurrency(item.subtotal, currency)}
-                          </span>
-                        </td>
-                        {isAdmin && (
-                          <td className="text-right">
-                            <span style={{ fontFamily:'var(--font-mono)', fontSize:'0.82rem', color:'var(--success)', fontWeight:600 }}>
-                              +{formatCurrency(margin, currency)}
-                            </span>
-                          </td>
-                        )}
-                      </tr>
-                    )
-                  })}
+                  {sale.items?.map(item => (
+                    <tr key={item.id}>
+                      <td>
+                        <div style={{ fontWeight:600, fontSize:'0.875rem' }}>{item.product_name}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{item.supplier_name || '—'}</div>
+                      </td>
+                      <td style={{ textAlign:'center' }}>
+                        <span style={{ fontFamily:'var(--font-mono)', fontWeight:700 }}>{item.quantity}</span>
+                      </td>
+                      <td className="text-right">
+                        <span style={{ fontFamily:'var(--font-mono)', fontSize:'0.85rem' }}>
+                          {formatCurrency(item.unit_price, currency)}
+                        </span>
+                      </td>
+                      <td className="text-right">
+                        <span style={{ fontFamily:'var(--font-mono)', fontWeight:700 }}>
+                          {formatCurrency(item.subtotal, currency)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -135,7 +122,6 @@ export default function SaleDetailPage() {
             <div className="card-body">
               {[
                 { label:'Sous-total', value: formatCurrency(sale.subtotal, currency) },
-                ...(parseFloat(sale.discount)>0 ? [{ label:'Remise', value:`- ${formatCurrency(sale.discount, currency)}`, color:'var(--danger)' }] : []),
                 ...(parseFloat(sale.tax_amount)>0 ? [{ label:'TVA', value: formatCurrency(sale.tax_amount, currency) }] : []),
               ].map(r => (
                 <div key={r.label} style={{ display:'flex', justifyContent:'space-between', marginBottom:8, fontSize:'0.875rem' }}>
@@ -152,10 +138,6 @@ export default function SaleDetailPage() {
               </div>
               <div className="divider" style={{ margin:'10px 0' }} />
               <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6, fontSize:'0.85rem' }}>
-                <span style={{ color:'var(--text-secondary)' }}>Paiement</span>
-                <span className="badge badge-blue">{PAYMENT_LABELS[sale.payment_method] || sale.payment_method}</span>
-              </div>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6, fontSize:'0.85rem' }}>
                 <span style={{ color:'var(--text-secondary)' }}>Montant reçu</span>
                 <span style={{ fontFamily:'var(--font-mono)', fontWeight:600 }}>{formatCurrency(sale.amount_paid, currency)}</span>
               </div>
@@ -164,15 +146,6 @@ export default function SaleDetailPage() {
                   <span style={{ color:'var(--success)', fontWeight:600 }}>Monnaie rendue</span>
                   <span style={{ fontFamily:'var(--font-mono)', fontWeight:700, color:'var(--success)' }}>{formatCurrency(sale.change_given, currency)}</span>
                 </div>
-              )}
-              {sale.total_margin !== undefined && isAdmin && (
-                <>
-                  <div className="divider" style={{ margin:'10px 0' }} />
-                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.85rem' }}>
-                    <span style={{ color:'var(--text-secondary)' }}>Bénéfice net</span>
-                    <span style={{ fontFamily:'var(--font-mono)', fontWeight:700, color:'var(--success)' }}>+{formatCurrency(sale.total_margin, currency)}</span>
-                  </div>
-                </>
               )}
             </div>
           </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
-  TrendingUp, TrendingDown, Minus, ShoppingBag, DollarSign,
+  TrendingUp, TrendingDown, Minus, DollarSign,
   Package, AlertTriangle, RefreshCw, ArrowRight, Eye, Zap
 } from 'lucide-react'
 import {
@@ -73,26 +73,23 @@ export default function DashboardPage() {
   const [daily, setDaily]   = useState([])
   const [recent, setRecent] = useState([])
   const [catData, setCatData] = useState([])
-  const [stockVal, setStockVal] = useState(null)
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [kpiRes, dailyRes, recentRes, catRes, stockRes, alertRes] = await Promise.all([
+      const [kpiRes, dailyRes, recentRes, catRes, alertRes] = await Promise.all([
         reportsAPI.dashboard(),
         reportsAPI.dailyChart(7),
         reportsAPI.recentSales(),
         reportsAPI.categoryChart(),
-        reportsAPI.stockValue(),
         stockAPI.alerts(),
       ])
       setKpi(kpiRes.data)
       setDaily(dailyRes.data)
       setRecent(Array.isArray(recentRes.data) ? recentRes.data : recentRes.data?.results || [])
       setCatData(catRes.data?.slice(0, 5) || [])
-      setStockVal(stockRes.data)
       setAlerts((alertRes.data?.results ?? alertRes.data)?.slice(0, 5) || [])
     } catch (e) {
       toast.error('Erreur de chargement du tableau de bord')
@@ -164,7 +161,7 @@ export default function DashboardPage() {
             label="CA ce mois"
             value={m.revenue || 0}
             variation={m.variation_revenue}
-            sub={`Bénéfice : ${formatCurrency(m.profit || 0, currency)}`}
+            sub={`${m.count || 0} vente(s)`}
             icon={TrendingUp}
             color="var(--success)"
             bg="var(--success-light)"
@@ -179,17 +176,6 @@ export default function DashboardPage() {
           color="var(--orange-500)"
           bg="var(--orange-100)"
         />
-        {isAdmin && (
-          <KPICard
-            label="Valeur du stock"
-            value={stockVal?.selling_value || 0}
-            variation={0}
-            sub={`Achat : ${formatCurrency(stockVal?.purchase_value || 0, currency)}`}
-            icon={ShoppingBag}
-            color="var(--info)"
-            bg="var(--info-light)"
-          />
-        )}
       </div>
 
       {/* Charts + Tables */}
@@ -309,7 +295,6 @@ export default function DashboardPage() {
                 <tr>
                   <th>Facture</th>
                   <th>Client</th>
-                  <th>Paiement</th>
                   <th style={{ textAlign: 'right' }}>Total</th>
                   <th style={{ textAlign: 'right' }}>Date</th>
                   <th></th>
@@ -317,16 +302,11 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {recent.length === 0 ? (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>Aucune vente</td></tr>
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>Aucune vente</td></tr>
                 ) : recent.map(sale => (
                   <tr key={sale.id}>
                     <td><span className="td-mono" style={{ color: 'var(--blue-600)' }}>{sale.invoice_number}</span></td>
                     <td style={{ fontSize: '0.82rem' }}>{sale.client_name || 'Comptoir'}</td>
-                    <td>
-                      <span className="badge badge-blue" style={{ fontSize: '0.68rem' }}>
-                        {sale.payment_method_display}
-                      </span>
-                    </td>
                     <td className="text-right">
                       <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '0.85rem' }}>
                         {formatCurrency(sale.total_amount, currency)}

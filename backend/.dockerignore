@@ -1,0 +1,22 @@
+# Données locales — ne jamais embarquer dans l'image
+db.sqlite3
+data/
+media/
+factures/
+backup/
+staticfiles/
+
+# Environnements Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.coverage.*
+
+# Fichiers de développement / tests
+tests/
+test_stock.py
+check_counts.py
+*.log

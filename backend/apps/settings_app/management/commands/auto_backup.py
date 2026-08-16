@@ -14,9 +14,9 @@ class Command(BaseCommand):
     help = 'Sauvegarde automatique de la base de données SQLite'
 
     def handle(self, *args, **options):
-        db_path = settings.BASE_DIR / 'db.sqlite3'
+        db_path = settings.DB_PATH
         if not db_path.exists():
-            self.stderr.write('db.sqlite3 introuvable')
+            self.stderr.write(f'{db_path} introuvable')
             return
 
         backup_dir = settings.BACKUP_DIR

@@ -1,142 +1,217 @@
 # MICROLOGIS Stock Manager
 
-Application de gestion de stock locale pour MICROLOGIS INFORMATIQUE & GSM, Parakou, Bénin.
+Application de gestion de stock multi-boutiques pour **MICROLOGIS INFORMATIQUE & GSM**, Parakou, Bénin.
 
-## Prérequis
-
-Avant de démarrer, assurez-vous d’avoir installé :
-
-- Git
-- Docker Desktop avec Docker Compose **ou**, pour le mode local, Python 3.12 et Node.js LTS
-- Un navigateur web moderne
-
-> Sous Windows, les scripts sont séparés par mode dans [scripts/windows](scripts/windows/README.md).
+- Frontend : React + Vite (servi par Nginx)
+- Backend : Django + Django REST Framework + Channels (Daphne)
+- Base de données : SQLite (fichier local, aucune dépendance cloud)
+- Conteneurisation : Docker Compose
 
 ---
 
-## 1. Choisir un mode de démarrage
+## 1. Déploiement sur la machine du client (mode Docker)
 
-### Mode Docker
+### 1.1 Prérequis sur la machine cible
 
-Depuis votre terminal, placez-vous dans le dossier de travail puis exécutez :
+| Logiciel | Version | Vérification |
+|---|---|---|
+| Docker Desktop (Windows) ou Docker Engine (Linux) | 24+ | `docker --version` |
+| Docker Compose | v2 | `docker compose version` |
+| Git | récente | `git --version` |
+
+Ressources : 4 Go de RAM libres, 2 Go de disque, accès Internet **au premier lancement** (téléchargement des images).
+
+### 1.2 Récupérer le projet
 
 ```bash
 git clone <url-du-depot>
 cd "Stock management"
-docker compose up -d
 ```
 
-Sous Windows, double-cliquez sur `scripts/windows/docker/start.bat` (les fichiers `start.bat` et `stop.bat` à la racine restent des raccourcis Docker).
+> La base de données **ne fait pas partie du dépôt** (voir §4) : la machine du client démarre donc **automatiquement avec une base neuve**.
 
-### Mode local, sans Docker (Windows)
+### 1.3 Lancer l'application (premier lancement)
 
-1. Double-cliquez sur `scripts/windows/local/install.bat` : installation des dépendances, migrations et compte administrateur.
-2. Double-cliquez sur `scripts/windows/local/start.bat` : les deux terminaux nécessaires et le navigateur s’ouvrent automatiquement.
-3. Pour arrêter l’application, double-cliquez sur `scripts/windows/local/stop.bat`.
+```bash
+docker compose up --build -d
+```
 
-Le mode local démarre Daphne pour que l’API et le WebSocket fonctionnent correctement.
+Sous Windows : double-cliquez sur `start.bat` (racine) — il crée le dossier `backend\data` puis démarre les conteneurs.
+
+Le premier lancement construit les images **backend** et **frontend**. Cela peut prendre plusieurs minutes.
+
+> 🌐 **Fonctionnement hors-ligne :** une fois les images construites (ou chargées via `docker load`), l'application tourne **sans aucune connexion Internet** — tout est local (base SQLite, PDF, WebSocket en mémoire). Internet n'est nécessaire qu'à la **première** construction des images.
+
+### 1.4 Vérifier que tout fonctionne
+
+```bash
+docker compose ps        # les 2 services doivent être "Up"
+```
+
+| URL | Description |
+|---|---|
+| `http://localhost` | Application (interface) |
+| `http://localhost/admin/` | Administration Django |
+| `http://localhost/api/` | API REST |
+| `http://localhost:8000` | Backend direct (optionnel) |
 
 ---
 
-## 2. Accéder à l’application
+## 2. Compte administrateur et accès Django Admin
 
-Une fois les conteneurs démarrés :
+### 2.1 Compte initial
 
-- Interface utilisateur : http://localhost
-- API Django : http://localhost/api/
-- Administration Django : http://localhost/admin/
-- WebSocket stock : ws://localhost/ws/stock/
+Au premier démarrage, le backend crée automatiquement un administrateur :
 
-Le frontend est servi via Nginx, et les appels API sont automatiquement redirigés vers le backend Django.
+- **Nom d'utilisateur :** `admin`
+- **Mot de passe :** `micrologis2026`
+
+> **Changez immédiatement ce mot de passe** après la première connexion (Paramètres → Mon profil).
+
+### 2.2 Personnaliser les identifiants (recommandé)
+
+Les identifiants du compte auto-créé sont configurables par variables d'environnement dans `docker-compose.yml` :
+
+```yaml
+environment:
+  - ADMIN_USERNAME=admin
+  - ADMIN_EMAIL=admin@micrologis.local
+  - ADMIN_PASSWORD=micrologis2026
+```
+
+Le compte n'est créé que s'il n'existe pas : le mot de passe ne sera **pas** réinitialisé à chaque redémarrage.
+
+### 2.3 Administration Django
+
+`http://localhost/admin/` donne accès à l'interface d'administration Django (utilisateurs, produits, ventes, stock, paramètres…). Seuls les comptes `is_staff` ou `is_superuser` y accèdent — par défaut, seul `admin`.
 
 ---
 
-## 3. Première configuration
+## 3. Gestion des images et des conteneurs
 
-Au premier lancement, l’application crée automatiquement un compte administrateur si aucun utilisateur n’existe encore :
+### Démarrer / arrêter
 
-- Nom d’utilisateur : admin
-- Mot de passe : micrologis2026
+```bash
+docker compose up -d      # démarrer (déjà construit)
+docker compose down       # arrêter (les données sont conservées)
+docker compose ps         # état des services
+docker compose logs -f    # journaux en direct
+docker compose logs backend -f    # journaux du seul backend
+```
 
-Il est fortement recommandé de changer ce mot de passe immédiatement depuis l’interface de paramètres.
+### Reconstruire après une mise à jour de code
 
-### Configuration recommandée après la première connexion
+```bash
+docker compose build      # reconstruit les images (code)
+docker compose up -d      # applique la nouvelle version
+```
 
-- Modifier le mot de passe administrateur
-- Définir les informations du magasin dans Paramètres
-- Charger le logo de l’entreprise
-- Ajuster les seuils d’alerte de stock
-- Créer les utilisateurs employés si nécessaire
+Raccourci Windows : `update.bat` (racine).
+
+### Nettoyer les images inutilisées
+
+```bash
+docker image prune -a     # supprime les images non utilisées (attention : re-téléchargement au prochain lancement)
+docker system df          # espace disque utilisé par Docker
+```
+
+### Sauvegarder / exporter les images (déploiement sans Internet)
+
+Sur la machine avec Internet (une fois les images construites) :
+
+```bash
+docker save stockmanagement_backend:latest stockmanagement_frontend:latest -o micrologis-images.tar
+```
+
+Puis sur la machine cible, copier le fichier `.tar` :
+
+```bash
+docker load -i micrologis-images.tar
+docker compose up -d
+```
+
+La machine cible n'a alors **jamais besoin d'Internet**.
 
 ---
 
-## 4. Arrêter et relancer l’application
+## 4. Base de données neuve — comment ça marche
 
-### Arrêter
+- `*.sqlite3`, `backend/data/`, `backend/media/`, `backend/factures/`, `backend/backup/` sont **ignorés par Git** (voir `.gitignore`).
+- À chaque clone sur une nouvelle machine, **il n'y a aucune base** : au premier `docker compose up`, le backend :
+  1. applique les migrations → crée toutes les tables (vierges) ;
+  2. crée le compte `admin` ;
+  3. démarre Daphne.
 
-```bash
-docker compose down
-```
+La base vit dans `backend/data/db.sqlite3` (dossier monté dans le conteneur, persistant). Pour repartir d'une base neuve : `docker compose down`, supprimez `backend/data/db.sqlite3`, puis `docker compose up -d`.
 
-Ou sur Windows : double-cliquez sur `scripts/windows/docker/stop.bat`.
-
-### Relancer
-
-```bash
-docker compose up -d
-```
-
-### Rebuilder après un changement de code
-
-```bash
-docker compose build
-docker compose up -d
-```
-
-Ou sur Windows : double-cliquez sur `update.bat` à la racine (ou `scripts/windows/docker/update.bat`).
+> ⚠️ **Migration de premier déploiement :** la migration `catalog/0004` vide les anciennes données de catalogue (produits/catégories). Sur une base neuve c'est sans effet (tables déjà vides). Ne déployez **pas** ce dépôt par-dessus une ancienne base remplie sans sauvegarde préalable.
 
 ---
 
 ## 5. Données et sauvegardes
 
-Les données principales sont stockées dans :
+| Donnée | Emplacement (hôte) |
+|---|---|
+| Base de données | `backend/data/db.sqlite3` |
+| Images / logo / médias | `backend/media/` |
+| Factures PDF générées | `backend/factures/` |
+| Sauvegardes automatiques | `backend/backup/` |
 
-- Base de données : backend/db.sqlite3
-- Médias : backend/media/
-- Factures générées : backend/factures/
-- Sauvegardes : backend/backup/
+L'application fait une **sauvegarde automatique quotidienne** et propose aussi :
+- Sauvegarde manuelle (Paramètres → Sauvegardes)
+- Téléchargement / restauration de la base depuis l'interface
+- Restauration : remplace `db.sqlite3` (une copie de l'ancienne est conservée dans `backup/`)
 
-Vous pouvez aussi créer ou restaurer des sauvegardes depuis la section Paramètres de l’application.
-
----
-
-## 6. Résolution des problèmes courants
-
-### Docker n’est pas démarré
-Vérifiez que Docker Desktop est lancé avant d’exécuter les commandes.
-
-### L’application ne répond pas
-Vérifiez l’état des conteneurs :
-
-```bash
-docker compose ps
-```
-
-### Les changements ne s’appliquent pas
-Reconstruisez les conteneurs avec :
-
-```bash
-docker compose build
-docker compose up -d
-```
-Ou sur Windows : utilisez le fichier `update.bat`.
+Ces 4 dossiers sont volontairement laissés **hors Git** : ils sont propres à chaque machine.
 
 ---
 
-## 7. Structure technique rapide
+## 6. Rôles et permissions
 
-- Frontend : React + Vite
-- Backend : Django + Django REST Framework
-- Base de données : SQLite
-- Temps réel : Django Channels + WebSockets
-- Conteneurisation : Docker Compose
+| Rôle | Boutiques/Catégories/Produits | Stock & Réappros | Ventes (POS) | Paramètres & Utilisateurs |
+|---|---|---|---|---|
+| **Admin** | Lecture + écriture | Lecture + écriture | Lecture + écriture | Oui |
+| **Employé** | **Lecture seule** | Lecture seule | Création de ventes (prix libre) | Non |
+
+Un compte est considéré **admin** si **une** de ces conditions est vraie : `role == 'admin'` **ou** `is_staff` **ou** `is_superuser`. (Frontend et backend appliquent exactement la même règle.)
+
+La gestion multi-boutiques se fait dans la page **Boutiques** (admin uniquement) ; la profondeur des catégories est limitée à 4 niveaux.
+
+---
+
+## 7. Dépannage
+
+| Problème | Solution |
+|---|---|
+| Conteneurs non démarrés | `docker compose ps` puis `docker compose up -d` |
+| Port 80 occupé | Changer `"80:80"` dans `docker-compose.yml` (ex. `"8080:80"`) puis relancer |
+| Image obsolète | `docker compose build && docker compose up -d` |
+| Mot de passe admin oublié | `docker compose exec backend python manage.py changepassword admin` |
+| Erreur "database is locked" | Arrêter tout (`docker compose down`), relancer |
+| Pas d'Internet au 1er lancement | Pré-charger les images (§3 « exporter les images ») |
+
+---
+
+## 8. Mode local sans Docker (développement, Windows)
+
+1. Double-cliquez sur `scripts/windows/local/install.bat` (dépendances + migrations + compte admin).
+2. Double-cliquez sur `scripts/windows/local/start.bat` (backend Daphne + frontend Vite, navigateur ouvert sur `http://localhost:5173`).
+3. `scripts/windows/local/stop.bat` pour arrêter.
+
+Prérequis : Python 3.12 (`py -3`) et Node.js LTS.
+
+---
+
+## 9. Développement
+
+```bash
+# Backend (tests)
+cd backend
+venv/bin/python -m pytest                # suite complète
+
+# Frontend (build de production)
+cd frontend
+npm run build
+```
+
+Détails techniques : voir [docs/MICROLOGIS_DOCUMENTATION.md](docs/MICROLOGIS_DOCUMENTATION.md) et [docs/GUIDE_UTILISATEUR.md](docs/GUIDE_UTILISATEUR.md).
