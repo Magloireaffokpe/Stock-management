@@ -232,3 +232,34 @@ npm run build
 ```
 
 Détails techniques : voir [docs/MICROLOGIS_DOCUMENTATION.md](docs/MICROLOGIS_DOCUMENTATION.md) et [docs/GUIDE_UTILISATEUR.md](docs/GUIDE_UTILISATEUR.md).
+
+<!-- nouveau-pc:debut -->
+## Installer sur un nouveau PC
+
+**Prérequis :** Git et Docker avec Compose. Sans Docker : Python 3.12 et Node.js 20 ou plus.
+
+```bash
+git clone git@github.com:Magloireaffokpe/Stock-management.git
+cd Stock-management
+./start.sh                   # http://localhost   (Windows : start.bat)
+./stop.sh                    # arrêt
+```
+
+**Sans Docker :**
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate   # Windows : venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+
+# Dans un autre terminal
+cd frontend && npm install && npm run dev
+```
+
+WeasyPrint (factures PDF) a besoin de bibliothèques système ; sous Ubuntu : `sudo apt install libpango-1.0-0 libpangoft2-1.0-0`.
+
+**À recopier à la main (hors Git) :** `backend/db.sqlite3`, `backend/data/`, `backend/backup/` et `backend/factures/` pour conserver les données.
+<!-- nouveau-pc:fin -->
