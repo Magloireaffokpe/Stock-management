@@ -27,6 +27,8 @@ export default function POSPage() {
   const [showSuccess, setShowSuccess] = useState(null);
   const [catFilter, setCatFilter] = useState("all");
   const [storeFilter, setStoreFilter] = useState("all");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [conditionFilter, setConditionFilter] = useState("all");
   const [categories, setCategories] = useState([]);
   const [stores, setStores] = useState([]);
   const searchRef = useRef();
@@ -60,7 +62,7 @@ export default function POSPage() {
 
   // Recherche via API quand les filtres changent
   useEffect(() => {
-    if (!debouncedQuery.trim() && catFilter === "all" && storeFilter === "all") {
+    if (!debouncedQuery.trim() && catFilter === "all" && storeFilter === "all" && stockFilter === "all" && conditionFilter === "all") {
       setProducts(allProducts); // Restaure les produits initiaux
       return;
     }
@@ -70,10 +72,12 @@ export default function POSPage() {
         const res = await catalogAPI.products({
           page_size: 50,
           is_active: true,
-          min_stock: 1,
+          ...(stockFilter === "all" && { min_stock: 1 }),
           ...(debouncedQuery && { search: debouncedQuery }),
           ...(catFilter !== "all" && { category: catFilter }),
           ...(storeFilter !== "all" && { store: storeFilter }),
+          ...(stockFilter !== "all" && { stock_status: stockFilter }),
+          ...(conditionFilter !== "all" && { condition: conditionFilter }),
         });
         setProducts(res.data?.results ?? res.data ?? []);
       } catch (e) {
@@ -81,7 +85,7 @@ export default function POSPage() {
       }
     };
     search();
-  }, [debouncedQuery, catFilter, storeFilter, allProducts]);
+  }, [debouncedQuery, catFilter, storeFilter, stockFilter, conditionFilter, allProducts]);
 
   const addToCart = (product) => {
     if (product.stock_quantity <= 0) return;
@@ -246,6 +250,29 @@ export default function POSPage() {
               {s.name}
             </option>
           ))}
+        </select>
+        <select
+          className="input"
+          style={{ width: "auto", minWidth: 150 }}
+          value={stockFilter}
+          onChange={(e) => setStockFilter(e.target.value)}
+        >
+          <option value="all">Tous les états</option>
+          <option value="ok">En stock</option>
+          <option value="low">Stock faible</option>
+          <option value="critical">Stock critique</option>
+          <option value="out_of_stock">Rupture</option>
+        </select>
+        <select
+          className="input"
+          style={{ width: "auto", minWidth: 140 }}
+          value={conditionFilter}
+          onChange={(e) => setConditionFilter(e.target.value)}
+        >
+          <option value="all">Toutes conditions</option>
+          <option value="new">Neuf</option>
+          <option value="used">Occasion</option>
+          <option value="refurbished">Reconditionné</option>
         </select>
         <div
           style={{

@@ -10,6 +10,7 @@ export default function SaleDetailPage() {
   const { id } = useParams()
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
   const isAdmin  = useAuthStore(s => s.isAdmin())
+  const user     = useAuthStore(s => s.user)
   const [sale, setSale]     = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -53,7 +54,7 @@ export default function SaleDetailPage() {
           >
             <Download size={15} /> Facture PDF
           </button>
-          {!sale.is_cancelled && isAdmin && (
+          {!sale.is_cancelled && (isAdmin || sale.created_by === user?.id) && (
             <button className="btn btn-danger btn-sm" onClick={handleCancel}>
               <XCircle size={15} /> Annuler la vente
             </button>

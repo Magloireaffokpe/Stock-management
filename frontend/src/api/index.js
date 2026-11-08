@@ -58,7 +58,7 @@ export const storesAPI = {
   get:    (id)     => client.get(`/stores/${id}/`),
   create: (data)   => client.post('/stores/', data),
   update: (id, d)  => client.patch(`/stores/${id}/`, d),
-  // DELETE intentionnellement absent (bloqué côté API)
+  delete: (id)     => client.delete(`/stores/${id}/`),
 }
 
 // Fix updateProduct FormData detection

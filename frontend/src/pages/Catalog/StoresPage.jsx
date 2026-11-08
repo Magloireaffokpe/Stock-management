@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Store, Edit2, FolderOpen, Package, X, Check } from 'lucide-react'
+import { Plus, Store, Edit2, FolderOpen, Package, X, Check, Trash2 } from 'lucide-react'
 import { storesAPI, catalogAPI } from '../../api'
 import CategoryTree from './CategoryTree'
 import ProductModal from './ProductModal'
 import QuickAddCategoryModal from './QuickAddCategoryModal'
+import EditCategoryModal from './EditCategoryModal'
 import useAuthStore from '../../store/authStore'
 import useSettingsStore from '../../store/settingsStore'
 import toast from 'react-hot-toast'
@@ -26,6 +27,11 @@ export default function StoresPage() {
   const [presetCategory, setPresetCategory] = useState(null)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [categoryModalParent, setCategoryModalParent] = useState(null)
+  const [editCategory, setEditCategory] = useState(null)
+  const [deleteCategoryTarget, setDeleteCategoryTarget] = useState(null)
+  const [deletingCategory, setDeletingCategory] = useState(false)
+  const [deleteStoreTarget, setDeleteStoreTarget] = useState(null)
+  const [deletingStore, setDeletingStore] = useState(false)
   const [treeRefreshKey, setTreeRefreshKey] = useState(0)
   const [suppliers, setSuppliers] = useState([])
 
@@ -61,6 +67,45 @@ export default function StoresPage() {
   const openAddCategoryFromTree = (parentCat) => {
     setCategoryModalParent(parentCat)
     setShowCategoryModal(true)
+  }
+
+  const openEditCategory = (cat) => {
+    setEditCategory(cat)
+  }
+
+  const openDeleteCategory = (cat) => {
+    setDeleteCategoryTarget(cat)
+  }
+
+  const confirmDeleteCategory = async () => {
+    if (!deleteCategoryTarget) return
+    setDeletingCategory(true)
+    try {
+      await catalogAPI.deleteCategory(deleteCategoryTarget.id)
+      toast.success('Catégorie supprimée')
+      setDeleteCategoryTarget(null)
+      setTreeRefreshKey(k => k + 1)
+      loadStores()
+    } catch (e) {
+      const err = e.response?.data
+      const msg = err?.error || 'Impossible de supprimer cette catégorie (elle contient peut-être des sous-catégories ou des produits)'
+      toast.error(msg)
+    } finally { setDeletingCategory(false) }
+  }
+
+  const confirmDeleteStore = async () => {
+    if (!deleteStoreTarget) return
+    setDeletingStore(true)
+    try {
+      await storesAPI.delete(deleteStoreTarget.id)
+      toast.success('Boutique supprimée')
+      setDeleteStoreTarget(null)
+      loadStores()
+    } catch (e) {
+      const err = e.response?.data
+      const msg = err?.error || 'Impossible de supprimer cette boutique'
+      toast.error(msg)
+    } finally { setDeletingStore(false) }
   }
 
   const handleStoreSaved = () => {
@@ -140,13 +185,22 @@ export default function StoresPage() {
                     </div>
                   </div>
                   {isAdmin && (
-                  <button
-                    className="btn btn-ghost btn-icon btn-sm"
-                    title="Modifier la boutique"
-                    onClick={e => { e.stopPropagation(); setEditStore(s); setShowStoreModal(true) }}
-                  >
-                    <Edit2 size={13} />
-                  </button>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      className="btn btn-ghost btn-icon btn-sm"
+                      title="Modifier la boutique"
+                      onClick={e => { e.stopPropagation(); setEditStore(s); setShowStoreModal(true) }}
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-icon btn-sm"
+                      title="Supprimer la boutique"
+                      onClick={e => { e.stopPropagation(); setDeleteStoreTarget(s) }}
+                    >
+                      <Trash2 size={13} style={{ color: 'var(--danger)' }} />
+                    </button>
+                  </div>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 12, marginTop: 12, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -188,6 +242,8 @@ export default function StoresPage() {
           refreshKey={treeRefreshKey}
           onAddProduct={openProductFromTree}
           onAddCategory={openAddCategoryFromTree}
+          onEditCategory={openEditCategory}
+          onDeleteCategory={openDeleteCategory}
         />
       </div>
 
@@ -223,6 +279,7 @@ export default function StoresPage() {
         <QuickAddCategoryModal
           stores={stores}
           parentCat={categoryModalParent}
+          defaultStoreId={selectedId}
           onClose={() => { setShowCategoryModal(false); setCategoryModalParent(null) }}
           onSaved={() => {
             setShowCategoryModal(false)
@@ -231,6 +288,70 @@ export default function StoresPage() {
             loadStores()
           }}
         />
+      )}
+
+      {/* Modal modification catégorie */}
+      {editCategory && (
+        <EditCategoryModal
+          category={editCategory}
+          stores={stores}
+          onClose={() => setEditCategory(null)}
+          onSaved={() => {
+            setEditCategory(null)
+            setTreeRefreshKey(k => k + 1)
+            loadStores()
+          }}
+        />
+      )}
+
+      {/* Modal confirmation suppression catégorie */}
+      {deleteCategoryTarget && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <span className="modal-title">Supprimer la catégorie</span>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteCategoryTarget(null)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: 8 }}>Voulez-vous vraiment supprimer <strong>{deleteCategoryTarget.name}</strong> ?</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                Cette catégorie ne pourra pas être supprimée si elle contient des sous-catégories ou des produits.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setDeleteCategoryTarget(null)}>Annuler</button>
+              <button className="btn" onClick={confirmDeleteCategory} disabled={deletingCategory}
+                style={{ background: 'var(--danger)', color: '#fff', borderColor: 'var(--danger)' }}>
+                {deletingCategory ? <><div className="spinner" /> Suppression…</> : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmation suppression boutique */}
+      {deleteStoreTarget && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <span className="modal-title">Supprimer la boutique</span>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteStoreTarget(null)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: 8 }}>Voulez-vous vraiment supprimer <strong>{deleteStoreTarget.name}</strong> ?</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                Cette boutique ne pourra pas être supprimée si elle contient des produits ou d'autres éléments.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setDeleteStoreTarget(null)}>Annuler</button>
+              <button className="btn" onClick={confirmDeleteStore} disabled={deletingStore}
+                style={{ background: 'var(--danger)', color: '#fff', borderColor: 'var(--danger)' }}>
+                {deletingStore ? <><div className="spinner" /> Suppression…</> : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

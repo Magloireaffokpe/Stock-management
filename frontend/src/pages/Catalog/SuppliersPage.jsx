@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Edit2, X, Truck, Phone, RefreshCw } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, X, Truck, Phone, RefreshCw } from 'lucide-react'
 import { catalogAPI } from '../../api'
 import useAuthStore from '../../store/authStore'
 import toast from 'react-hot-toast'
@@ -22,6 +22,15 @@ export default function SuppliersPage() {
   }, [search])
 
   useEffect(() => { load() }, [load])
+
+  const handleDelete = async (s) => {
+    if (!confirm(`Supprimer le fournisseur « ${s.name} » ?`)) return
+    try {
+      await catalogAPI.deleteSupplier(s.id)
+      toast.success('Fournisseur supprimé')
+      load()
+    } catch (e) { toast.error(e.response?.data?.error || 'Erreur suppression') }
+  }
 
   return (
     <div>
@@ -79,9 +88,14 @@ export default function SuppliersPage() {
                   </div>
                 </div>
                 {isAdmin && (
-                  <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setEditSupplier(s); setShowModal(true) }}>
-                    <Edit2 size={13} />
-                  </button>
+                  <div style={{ display:'flex', gap:2 }}>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setEditSupplier(s); setShowModal(true) }}>
+                      <Edit2 size={13} />
+                    </button>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => handleDelete(s)}>
+                      <Trash2 size={13} style={{ color:'var(--danger)' }} />
+                    </button>
+                  </div>
                 )}
               </div>
               <div style={{ display:'flex', gap:12, paddingTop:10, borderTop:'1px solid var(--border)' }}>

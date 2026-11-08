@@ -35,7 +35,11 @@ class StoreViewSet(viewsets.ModelViewSet):
         )
 
     def destroy(self, request, *args, **kwargs):
-        return Response(
-            {"detail": "La suppression d'une boutique est interdite (405 Method Not Allowed)."},
-            status=status.HTTP_405_METHOD_NOT_ALLOWED
-        )
+        from django.db.models import ProtectedError
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"error": "Cette boutique ne peut pas être supprimée car elle contient des produits ou d'autres éléments rattachés."},
+                status=status.HTTP_400_BAD_REQUEST
+            )

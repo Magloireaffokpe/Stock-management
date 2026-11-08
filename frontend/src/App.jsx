@@ -97,7 +97,7 @@ export default function App() {
         <Route path="suppliers" element={<RequireAdmin><SuppliersPage /></RequireAdmin>} />
         <Route path="sales" element={<SalesPage />} />
         <Route path="sales/:id" element={<SaleDetailPage />} />
-        <Route path="restocks" element={<RequireAdmin><RestocksPage /></RequireAdmin>} />
+        <Route path="restocks" element={<RestocksPage />} />
         <Route path="stock" element={<StockPage />} />
         <Route path="clients" element={<ClientsPage />} />
         <Route path="reports" element={<RequireAdmin><ReportsPage /></RequireAdmin>} />

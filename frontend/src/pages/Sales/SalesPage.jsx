@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 export default function SalesPage() {
   const currency = useSettingsStore(s => s.settings?.currency || 'FCFA')
   const isAdmin  = useAuthStore(s => s.isAdmin())
+  const user     = useAuthStore(s => s.user)
   const navigate = useNavigate()
   const [sales, setSales]       = useState([])
   const [loading, setLoading]   = useState(true)
@@ -154,7 +155,7 @@ export default function SalesPage() {
                     <td>
                       <div style={{ display:'flex', gap:4 }}>
                         <Link to={`/sales/${s.id}`} className="btn btn-ghost btn-icon btn-sm" data-tooltip="Détail"><Eye size={14} /></Link>
-                        {!s.is_cancelled && isAdmin && (
+                        {!s.is_cancelled && (isAdmin || s.created_by === user?.id) && (
                           <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); handleCancel(s); }} data-tooltip="Annuler">
                             <XCircle size={14} style={{ color:'var(--danger)' }} />
                           </button>

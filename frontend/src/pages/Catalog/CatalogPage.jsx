@@ -136,7 +136,7 @@ export default function CatalogPage() {
             <RefreshCw size={14} />
           </button>
           {isAdmin && (
-            <button className="btn btn-primary" onClick={() => { setEditProduct(null); setPresetStore(null); setPresetCategory(null); setShowModal(true) }}>
+            <button className="btn btn-primary" onClick={() => { setEditProduct(null); setPresetStore(selectedStore || null); setPresetCategory(null); setShowModal(true) }}>
               <Plus size={16} /> Nouveau produit
             </button>
           )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Edit2, X, Users, Phone, RefreshCw } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, X, Users, Phone, RefreshCw } from 'lucide-react'
 import { salesAPI, formatCurrency } from '../../api'
 import useSettingsStore from '../../store/settingsStore'
 import toast from 'react-hot-toast'
@@ -22,6 +22,15 @@ export default function ClientsPage() {
   }, [search])
 
   useEffect(() => { load() }, [load])
+
+  const handleDelete = async (c) => {
+    if (!confirm(`Supprimer le client « ${c.full_name} » ?`)) return
+    try {
+      await salesAPI.deleteClient(c.id)
+      toast.success('Client supprimé')
+      load()
+    } catch (e) { toast.error(e.response?.data?.error || 'Erreur suppression') }
+  }
 
   return (
     <div>
@@ -73,9 +82,14 @@ export default function ClientsPage() {
                     )}
                   </div>
                 </div>
-                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setEditClient(c); setShowModal(true) }}>
-                  <Edit2 size={13} />
-                </button>
+                <div style={{ display:'flex', gap:2 }}>
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setEditClient(c); setShowModal(true) }}>
+                    <Edit2 size={13} />
+                  </button>
+                  <button className="btn btn-ghost btn-icon btn-sm" onClick={() => handleDelete(c)}>
+                    <Trash2 size={13} style={{ color:'var(--danger)' }} />
+                  </button>
+                </div>
               </div>
               <div style={{ display:'flex', gap:12, paddingTop:10, borderTop:'1px solid var(--border)' }}>
                 <div style={{ flex:1, textAlign:'center' }}>

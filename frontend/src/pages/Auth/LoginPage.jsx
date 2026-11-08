@@ -94,7 +94,7 @@ export default function LoginPage() {
           </div>
 
           {/* Formulaire */}
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} autoComplete="off">
             {error && (
               <div className="alert-banner danger" style={{ marginBottom: 18 }}>
                 <Lock size={15} /> {error}
@@ -108,10 +108,11 @@ export default function LoginPage() {
                 <input
                   className="input has-icon"
                   type="text"
+                  name="username"
                   placeholder="Votre identifiant"
                   value={form.username}
                   onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                  autoComplete="username"
+                  autoComplete="off"
                   autoFocus
                 />
               </div>
@@ -124,10 +125,11 @@ export default function LoginPage() {
                 <input
                   className="input has-icon"
                   type={showPwd ? 'text' : 'password'}
+                  name="password"
                   placeholder="••••••••"
                   value={form.password}
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   style={{ paddingRight: 40 }}
                 />
                 <button

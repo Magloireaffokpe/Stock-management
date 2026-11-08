@@ -4,14 +4,14 @@
  * Pas de N+1 : charge tout en une requête via /api/catalog/categories/tree/
  */
 import React, { useState, useEffect, useCallback } from 'react'
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Package } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Package, Pencil, Trash2 } from 'lucide-react'
 import { catalogAPI } from '../../api'
 import toast from 'react-hot-toast'
 
 export const MAX_CATEGORY_DEPTH = 4
 
 // ─── Nœud récursif ──────────────────────────────────────────────────────────
-function TreeNode({ node, depth, expandedIds, toggleExpand, onAddProduct, onAddCategory, isAdmin }) {
+function TreeNode({ node, depth, expandedIds, toggleExpand, onAddProduct, onAddCategory, onEditCategory, onDeleteCategory, isAdmin }) {
   const hasChildren = node.children && node.children.length > 0
   const isExpanded = expandedIds.has(node.id)
   const atMaxDepth = depth >= MAX_CATEGORY_DEPTH
@@ -117,6 +117,24 @@ function TreeNode({ node, depth, expandedIds, toggleExpand, onAddProduct, onAddC
               <Plus size={11} style={{ marginRight: 3 }} />
               Sous-cat.
             </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ padding: '2px 8px', fontSize: '0.72rem', height: 24 }}
+              onClick={() => onEditCategory(node)}
+              title="Modifier cette catégorie"
+            >
+              <Pencil size={11} style={{ marginRight: 3 }} />
+              Modifier
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ padding: '2px 8px', fontSize: '0.72rem', height: 24, color: 'var(--danger)' }}
+              onClick={() => onDeleteCategory(node)}
+              title="Supprimer cette catégorie"
+            >
+              <Trash2 size={11} style={{ marginRight: 3 }} />
+              Supprimer
+            </button>
           </div>
         )}
       </div>
@@ -133,6 +151,8 @@ function TreeNode({ node, depth, expandedIds, toggleExpand, onAddProduct, onAddC
               toggleExpand={toggleExpand}
               onAddProduct={onAddProduct}
               onAddCategory={onAddCategory}
+              onEditCategory={onEditCategory}
+              onDeleteCategory={onDeleteCategory}
               isAdmin={isAdmin}
             />
           ))}
@@ -143,7 +163,7 @@ function TreeNode({ node, depth, expandedIds, toggleExpand, onAddProduct, onAddC
 }
 
 // ─── Composant principal ─────────────────────────────────────────────────────
-export default function CategoryTree({ storeId, onAddProduct, onAddCategory, isAdmin = true, refreshKey = 0 }) {
+export default function CategoryTree({ storeId, onAddProduct, onAddCategory, onEditCategory, onDeleteCategory, isAdmin = true, refreshKey = 0 }) {
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(false)
   const [expandedIds, setExpandedIds] = useState(new Set())
@@ -226,6 +246,8 @@ export default function CategoryTree({ storeId, onAddProduct, onAddCategory, isA
             toggleExpand={toggleExpand}
             onAddProduct={onAddProduct}
             onAddCategory={onAddCategory}
+            onEditCategory={onEditCategory}
+            onDeleteCategory={onDeleteCategory}
             isAdmin={isAdmin}
           />
         ))}

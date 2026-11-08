@@ -4,11 +4,13 @@ import { catalogAPI } from '../../api'
 import toast from 'react-hot-toast'
 import { CATEGORY_ICONS } from './CategoryIcons'
 
-export default function QuickAddCategoryModal({ stores, parentCat, onClose, onSaved }) {
+export default function QuickAddCategoryModal({ stores, parentCat, defaultStoreId, onClose, onSaved }) {
   const [name, setName] = useState('')
   const [color, setColor] = useState(parentCat?.color || '#2563EB')
   const [icon, setIcon] = useState(parentCat?.icon || 'package')
-  const [storeId, setStoreId] = useState(parentCat?.store ?? parentCat?.store_id ?? '')
+  const [storeId, setStoreId] = useState(
+    parentCat?.store ?? parentCat?.store_id ?? defaultStoreId ?? ''
+  )
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {

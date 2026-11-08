@@ -31,7 +31,10 @@ const useAuthStore = create((set, get) => ({
       const res = await authAPI.me()
       set({ user: res.data, initialized: true })
     } catch {
-      set({ initialized: true })
+      // Token invalide ou expiré → nettoyer complètement la session
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      set({ user: null, accessToken: null, refreshToken: null, initialized: true })
     }
   },
 
